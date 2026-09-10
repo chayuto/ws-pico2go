@@ -17,7 +17,8 @@ ws-pico2go/
 │   ├── board.py          #   pin map (single source of truth) + estop()
 │   ├── sonar.py          #   ultrasonic that cannot hang
 │   └── Motor/ST7789/TRSensor/ws2812.py   # vendor drivers, original filenames
-├── projects/             # runnable apps
+├── projects/             # one project per subdirectory (main.py + README.md)
+├── tools/                # bring-up and diagnostics
 ├── ref/                  # Waveshare originals + schematic — gitignored, do not modify
 │   └── factory/          #   factory firmware backup (committed; no download exists)
 ├── docs/                 # 01–12 reference
@@ -66,6 +67,24 @@ closed-loop speed, the robot drifts.
 batteries through the slide switch** and feeds the motors, the WS2812 RGB LEDs and the
 ST188 IR obstacle emitters. Switch off + USB only ⇒ the MCU boots and the LCD works, but
 nothing moves and no LED lights. It is a silent no-op, not an error.
+
+## Long-running apps must exit on their own
+
+`pg run <app> <secs>` injects a global `PG_RUN_SECS`; apps that loop should read
+it and `return` when it expires:
+
+```python
+try:
+    limit_ms = int(PG_RUN_SECS) * 1000    # injected by pg run
+except NameError:
+    limit_ms = 0                          # 0 = until interrupted
+```
+
+This is not cosmetic. **Hard-killing `mpremote mount` wedges the board**: the
+serial port stays present but the REPL goes silent, and `soft-reset`, a Ctrl-C
+storm, DTR/RTS toggling, a 1200-baud touch and `picotool reboot` all fail to
+recover it — only the RESET button does. `pg run` now force-kills after a grace
+period, and `./pg unwedge` attempts the serial recovery first.
 
 ## Commands
 

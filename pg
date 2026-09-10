@@ -14,6 +14,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 LIB="$ROOT/shared/lib"
 APPS="$ROOT/projects"
+TOOLS="$ROOT/tools"
 VENDOR="$ROOT/ref"
 UF2_DEFAULT="$VENDOR/PicoGo_Code V2/uf2/RPI_PICO2-20250415-v1.25.0.uf2"
 
@@ -53,10 +54,15 @@ estop() { $MP exec "$ESTOP_PY" 2>/dev/null || warn "E-STOP could not reach the b
 resolve_app() {
     a=$1
     [ -f "$a" ] && { printf '%s' "$a"; return; }
-    [ -f "$APPS/$a" ] && { printf '%s' "$APPS/$a"; return; }
+    [ -f "$TOOLS/$a" ] && { printf '%s' "$TOOLS/$a"; return; }
+    [ -f "$TOOLS/$a.py" ] && { printf '%s' "$TOOLS/$a.py"; return; }
+    [ -f "$APPS/$a/main.py" ] && { printf '%s' "$APPS/$a/main.py"; return; }
     [ -f "$APPS/$a.py" ] && { printf '%s' "$APPS/$a.py"; return; }
-    [ -f "$VENDOR/PicoGo_Code V2/$a" ] && { printf '%s' "$VENDOR/PicoGo_Code V2/$a"; return; }
-    die "app not found: $a  (looked in ./, projects/, ref/)"
+    # allow a bare project number or partial name: 01, sensorous, 01_sensorous
+    for d in "$APPS"/*"$a"*/; do
+        [ -f "$d/main.py" ] && { printf '%s' "$d/main.py"; return; }
+    done
+    die "app not found: $a  (looked in ./, tools/, projects/<name>/main.py, ref/)"
 }
 
 usage() {
@@ -87,6 +93,7 @@ pg — Pico2Go command line
 
   SAFETY
     pg stop                   EMERGENCY STOP — motors + buzzer off immediately
+    pg unwedge                recover a board stuck after a hard-killed `pg run`
 
   Env: PG_PORT=/dev/cu.usbmodemXXXX to pin a board.
 USAGE
@@ -153,9 +160,10 @@ doctor)
 
     printf '\n\033[1mRepo\033[0m\n'
     nlib=$(ls "$LIB"/*.py 2>/dev/null | wc -l | tr -d ' ')
-    napp=$(ls "$APPS"/*.py 2>/dev/null | wc -l | tr -d ' ')
+    napp=$(ls -d "$APPS"/*/ 2>/dev/null | wc -l | tr -d ' ')
+    ntool=$(ls "$TOOLS"/*.py 2>/dev/null | wc -l | tr -d ' ')
     printf '  libs : %s module(s) in shared/lib\n' "$nlib"
-    printf '  apps : %s app(s) in projects\n'    "$napp"
+    printf '  apps : %s project(s) in projects, %s tool(s) in tools\n' "$napp" "$ntool"
     [ -f "$UF2_DEFAULT" ] && printf '  fw   : \033[32m✓\033[0m vendor firmware present\n' \
                           || printf '  fw   : \033[33m!\033[0m missing — run: pg fetch\n'
     printf '\n\033[2mReminder: the chassis power switch must be ON or nothing moves.\033[0m\n'
@@ -192,12 +200,17 @@ flash)
 run)
     [ $# -ge 1 ] || die "usage: pg run <app> [seconds]"
     app=$(resolve_app "$1"); secs=${2:-20}
-    info "run $app  (shared/lib mounted, ${secs}s cap, E-STOP on exit)"
+    # Apps that honour PG_RUN_SECS stop themselves a little early, so the host
+    # timeout stays a backstop. A hard-killed `mpremote mount` wedges the device
+    # (see `pg unwedge`), so a clean exit matters.
+    inner=$((secs - 3)); [ "$inner" -lt 3 ] && inner=3
+    info "run $app  (shared/lib mounted, app ${inner}s / hard cap ${secs}s, E-STOP on exit)"
     trap 'echo; estop' EXIT INT TERM
     if [ -n "$TIMEOUT" ]; then
-        $TIMEOUT --foreground -s INT "$secs" $MP mount "$LIB" run "$app" || true
+        $TIMEOUT -k 5 --foreground -s INT "$secs" \
+            $MP mount "$LIB" exec "PG_RUN_SECS=$inner" run "$app" || true
     else
-        $MP mount "$LIB" run "$app" || true
+        $MP mount "$LIB" exec "PG_RUN_SECS=$inner" run "$app" || true
     fi
     ;;
 
@@ -244,6 +257,19 @@ print('heap    : {} B free of {} B'.format(gc.mem_free(), gc.mem_free()+gc.mem_a
 info) picotool info -a 2>/dev/null || $MP eval "__import__('sys').implementation" ;;
 
 stop) info "EMERGENCY STOP"; estop ;;
+
+unwedge)
+    info "trying to break the board out of a wedged mount..."
+    py=$(head -1 "$(command -v mpremote)" | sed 's|^#!||')
+    "$py" "$ROOT/tools/unwedge.py" ${PG_PORT:-} || true
+    sleep 2
+    if $MP eval "1+1" >/dev/null 2>&1; then
+        info "recovered - the REPL is answering again"
+    else
+        warn "still wedged. Press RESET on the RP2350-Plus."
+        warn "(nothing is damaged - the device is blocked on a serial read)"
+    fi
+    ;;
 
 help|--help|-h) usage ;;
 *) die "unknown command: $cmd  (try: pg help)" ;;

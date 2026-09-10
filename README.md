@@ -34,13 +34,22 @@ Thonny-only. Both problems are solved here.
 
 ## Projects
 
-| Project | Description |
+| # | Project | Description |
+|---|---|---|
+| [01](projects/01_sensorous) | **Sensorous** | Every live sensor on the board except the radio — line array, IR obstacle, ultrasonic, battery, die temperature, IR receiver — across six LCD pages, mirrored to the RGB LEDs, streaming JSON Lines over serial. ~9–11 fps. |
+
+### Tools
+
+Bring-up and diagnostics, run the same way (`./pg run <name>`):
+
+| Tool | Description |
 |---|---|
-| [`selftest`](projects/selftest.py) | 11-check bring-up across every subsystem. **Never drives the motors.** Detects the power-switch-off case from the battery reading. |
-| [`probe`](projects/probe.py) | Deep autonomous validation — external pull-up detection, all 11 TLC2543 channels, protocol pipelining proof, PIO capacity, LCD/WS2812 timing. Never touches GP16–21. |
-| [`validate`](projects/validate.py) | Event-driven, guided. Waits for you; uses IR remote keys to label surfaces and settle the line-sensor polarity question. |
-| [`sensors`](projects/sensors.py) | Live line array / obstacle / sonar / battery readout for calibration. |
-| [`drive_check`](projects/drive_check.py) | Bounded motion test. **Wheels off the ground.** |
+| [`selftest`](tools/selftest.py) | 11-check bring-up across every subsystem. **Never drives the motors.** Detects the power-switch-off case from the battery reading. |
+| [`probe`](tools/probe.py) | Deep autonomous validation — external pull-up detection, all 11 TLC2543 channels, protocol pipelining proof, PIO capacity, LCD/WS2812 timing. Never touches GP16–21. |
+| [`validate`](tools/validate.py) | Event-driven, guided. Waits for you; uses IR remote keys to label surfaces and settle the line-sensor polarity question. |
+| [`sensors`](tools/sensors.py) | Live line array / obstacle / sonar / battery readout for calibration. |
+| [`drive_check`](tools/drive_check.py) | Bounded motion test. **Wheels off the ground.** |
+| [`unwedge`](tools/unwedge.py) | Recover a board stuck after a hard-killed `pg run` (`./pg unwedge`). |
 
 ---
 
@@ -63,7 +72,8 @@ Thonny-only. Both problems are solved here.
 ```
 ws-pico2go/
 ├── pg                    # the CLI — every device operation goes through it
-├── projects/             # runnable MicroPython apps
+├── projects/             # one project per subdirectory (main.py + README.md)
+├── tools/                # bring-up and diagnostics
 ├── shared/lib/           # device modules: board.py (pin map), sonar.py, vendor drivers
 ├── ref/                  # Waveshare originals + schematic (gitignored)
 │   └── factory/          #   factory firmware backup — committed, no download exists
@@ -103,6 +113,7 @@ brew install mpremote picotool coreutils   # not pip3 — Homebrew Python is PEP
 ./pg run <app> [secs]       # mounts shared/lib — no flash write, E-STOP on exit
 ./pg install <app>          # deploy as main.py, runs standalone on power-up
 ./pg stop                   # EMERGENCY STOP
+./pg unwedge                # recover a board stuck after a hard-killed run
 ```
 
 `./pg run` serves `shared/lib` to the board over the serial link with `mpremote mount`,
