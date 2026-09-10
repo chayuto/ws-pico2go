@@ -28,6 +28,29 @@ description: Driving the Pico2Go/PicoGo robot's two N20 motors through the TB661
 Direction truth: `xIN2=1, xIN1=0` → forward · `0,1` → reverse · `0,0` → coast.
 PWM 1 kHz, duty = `speed * 0xFFFF // 100`.
 
+## Use `drive.Drive`, not `PicoGo` directly
+
+`shared/lib/drive.py` wraps the vendor class with the four things an
+autonomous robot needs and `PicoGo` does not have:
+
+| | |
+|---|---|
+| `Drive(dry=True)` | never constructs `PicoGo` at all, so GP16–GP21 are not even claimed as outputs. `pg dry <app>` sets `PG_DRY=1` to select it. This is how to develop a driving behaviour with the robot on a desk. |
+| `brake(ms)` | the real TB6612 short brake. Measured in simulation: **1.0 cm to stop from 24 cm/s versus 1.9 cm coasting**, 2.2 cm/s residual versus 10.4. |
+| a speed ceiling | `MAX_SPEED`, default 60 %. Nothing the module emits exceeds it, so a bad constant in an app cannot launch the robot across the room. |
+| `tick()` deadman | every command carries a 300 ms expiry; `tick()` cuts power if the control loop has not refreshed it. Call it once per iteration. |
+
+The deadman catches a loop that has gone **slow** — a long blocking read, a fat
+render, a GC burst. It cannot catch one that has gone **dead**, because then
+nothing calls it; that is what `board.estop()` in a `finally:` and the
+EXIT/INT/TERM trap in `pg run` are for. A hardware WDT would catch it, but a
+WDT reset re-runs `main.py`, which on a robot with wheels means it drives off
+again unattended — so this repo does not use one.
+
+If a state in a state machine holds a manoeuvre longer than the deadman TTL,
+**re-issue the command every tick**. A scan leg of 520 ms with a 300 ms TTL had
+power cut in the middle of every scan.
+
 ## API — `shared/lib/Motor.py`, class `PicoGo`
 
 | Call | Effect |
@@ -75,5 +98,11 @@ finally:
     board.estop()
 ```
 
-`projects/drive_check.py` is the reference: short bounded bursts, `stop()` between each,
+`tools/drive_check.py` is the reference: short bounded bursts, `stop()` between each,
 `estop()` in `finally`, and a 3-second warning before it starts.
+
+## Anything that drives itself
+
+Read the `pico2go-avoidance` skill before writing it. Reversing is blind (no
+rear sensor), a timed-out ping is not "clear", and both of those have already
+cost collisions in simulation.

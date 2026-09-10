@@ -24,6 +24,8 @@ enumerated-but-no-CDC-node / running non-MicroPython firmware / healthy.
 |---|---|
 | Unwedge after a killed run | `./pg unwedge` |
 | Run an app | `./pg run <app> [secs]` — default cap 20 s, E-STOP on exit |
+| Run without driving | `./pg dry <app> [secs]` — injects `PG_DRY=1`; the app leaves GP16–21 unclaimed |
+| Test with no board | `./pg sim [args]` — runs `02_avoider` against a simulated room on the Mac |
 | One-liner probe | `./pg exec '<code>'` |
 | Expression | `./pg eval '<expr>'` |
 | Deploy libs | `./pg sync` |
@@ -89,5 +91,6 @@ for name, p in (("DSL",3),("DSR",2),("IR",5)):
 | IR remote, Bluetooth | `pico2go-remote-control` |
 | screen layout, charts, fonts, colours | `pico2go-display-ui` |
 | autorun, standalone, fault recovery, the mount wedge | `pico2go-unattended` |
+| driving itself, avoidance, wander, sonar fusion, thresholds | `pico2go-avoidance` |
 
-Long-form reference lives in `docs/01`–`docs/12`.
+Long-form reference lives in `docs/01`–`docs/13`.

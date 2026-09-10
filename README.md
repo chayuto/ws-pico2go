@@ -37,6 +37,7 @@ Thonny-only. Both problems are solved here.
 | # | Project | Description |
 |---|---|---|
 | [01](projects/01_sensorous) | **Sensorous** | Every live sensor on the board except the radio — line array, IR obstacle, ultrasonic, battery, die temperature, IR receiver — across six LCD pages, mirrored to the RGB LEDs, streaming JSON Lines over serial. ~9–11 fps. Runs standalone from `main.py`, restarts itself on a fault. |
+| [02](projects/02_avoider) | **Avoider** | Reactive obstacle avoidance on one fixed forward ultrasonic beam plus two IR bumpers — brake, back off on earned credit, body-scan left and right, take the freer side. Ten-state machine, pre-flight that refuses to drive a dead sensor, and a dry-run mode that never claims the motor pins. **Written and simulated; not yet run on the robot.** |
 
 ### Tools
 
@@ -49,7 +50,14 @@ Bring-up and diagnostics, run the same way (`./pg run <name>`):
 | [`validate`](tools/validate.py) | Event-driven, guided. Waits for you; uses IR remote keys to label surfaces and settle the line-sensor polarity question. |
 | [`sensors`](tools/sensors.py) | Live line array / obstacle / sonar / battery readout for calibration. |
 | [`drive_check`](tools/drive_check.py) | Bounded motion test. **Wheels off the ground.** |
+| [`sonar_check`](tools/sonar_check.py) | Ultrasonic characterisation — answer rate, cost per ping, jitter, dead zone. The numbers `02_avoider`'s thresholds rest on. Never drives the motors. |
 | [`unwedge`](tools/unwedge.py) | Recover a board stuck after a hard-killed `pg run` (`./pg unwedge`). |
+
+Plus one that runs on the Mac, not the board:
+
+| Tool | Description |
+|---|---|
+| [`sim_avoider`](tools/host/sim_avoider.py) | `./pg sim` — runs `02_avoider` unmodified against a simulated chassis and room. Stubs `machine`/`utime`/`ST7789`, fakes the TB6612 at the pin level, and charges the virtual clock for ping flight time and the 78 ms blit. Found four real bugs before any wheel turned. |
 
 ---
 
@@ -61,6 +69,7 @@ Bring-up and diagnostics, run the same way (`./pg run <name>`):
 | PIO | TLC2543 serial-ADC bit-bang, WS2812 driver, 10 free state machines for encoders |
 | Sensing | 12-bit reflectance array, PID line following, ultrasonic timing, comparator-based IR bumpers |
 | Control | Differential drive, PD tuning, open-loop limits without encoders |
+| Autonomy | Reactive avoidance, sonar/IR fusion, ambiguity of a timed-out ping, host-side simulation of the whole control loop |
 | Analog | Switched battery divider, median + exponential filtering, on-die temperature |
 | Reverse engineering | Full pin map recovered from a schematic PDF by positional net extraction |
 | Safety engineering | Hardcoded emergency stop that survives a broken filesystem, runtime caps, `finally:` discipline |
@@ -73,11 +82,12 @@ Bring-up and diagnostics, run the same way (`./pg run <name>`):
 ws-pico2go/
 ├── pg                    # the CLI — every device operation goes through it
 ├── projects/             # one project per subdirectory (main.py + README.md)
-├── tools/                # bring-up and diagnostics
-├── shared/lib/           # device modules: board.py (pin map), sonar.py, vendor drivers
+├── tools/                # bring-up and diagnostics (MicroPython)
+│   └── host/             #   Mac-side Python 3 — the simulator behind `pg sim`
+├── shared/lib/           # device modules: board.py (pin map), sonar.py, drive.py, vendor drivers
 ├── ref/                  # Waveshare originals + schematic (gitignored)
 │   └── factory/          #   factory firmware backup — committed, no download exists
-├── docs/                 # 01–12 reference
+├── docs/                 # 01–13 reference
 ├── CLAUDE.md             # Agent context — pin map, safety rules, verified facts
 └── .claude/skills/       # One agent skill per subsystem
 ```
@@ -95,12 +105,13 @@ matter, like *never drive the motors without confirming the wheels are clear*.
 | `pico2go-dev-loop` | The `./pg` workflow, `mpremote mount`, debugging with no human present. Entry point — routes to the rest. |
 | `pico2go-hardware` | Full pin map, 5 V vs 3V3 split, resource budget, V1/V2 board revisions, measured electrical facts |
 | `pico2go-flashing` | BOOTSEL, `picotool`, factory-firmware recovery, macOS CDC-attach failures, Pico SDK / Arduino |
-| `pico2go-motion` | TB6612 truth tables, pivot vs arc, brake vs coast, and the safety rules for an encoder-less robot |
+| `pico2go-motion` | TB6612 truth tables, pivot vs arc, brake vs coast, the `drive.Drive` layer, and the safety rules for an encoder-less robot |
 | `pico2go-line-following` | TLC2543 pipelining, calibration, the `white_line` polarity trap, PD tuning order |
 | `pico2go-sensors-io` | Non-blocking ultrasonic, IR trim pots, battery maths, ST7789 timing, WS2812, buzzer |
 | `pico2go-remote-control` | NEC decoding + full key-code table, JDY-32 pairing/baud traps, JSON protocol, deadman timers |
 | `pico2go-display-ui` | 240×135 text grid, bar and chart maths, the 78 ms blit budget, paging, the non-standard colour trap |
 | `pico2go-unattended` | `main.py` autorun, verifying standalone over raw serial, fault recovery, and the mount wedge only RESET clears |
+| `pico2go-avoidance` | Sonar/IR fusion, why a timeout is not "clear", the reverse credit, latency as stopping distance, the sideswipe nobody can fix in software |
 
 ---
 
@@ -113,6 +124,8 @@ brew install mpremote picotool coreutils   # not pip3 — Homebrew Python is PEP
 ./pg flash                  # MicroPython (bundled in the Waveshare package)
 ./pg run selftest           # 11 checks, never drives the motors
 ./pg run <app> [secs]       # mounts shared/lib — no flash write, E-STOP on exit
+./pg dry <app> [secs]       # same, but the app is told not to drive the motors
+./pg sim                    # run the avoider against a simulated room — no board
 ./pg install <app>          # deploy as main.py, runs standalone on power-up
 ./pg stop                   # EMERGENCY STOP
 ./pg unwedge                # recover a board stuck after a hard-killed run

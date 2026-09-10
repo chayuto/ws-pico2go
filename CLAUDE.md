@@ -16,12 +16,14 @@ ws-pico2go/
 ├── shared/lib/           # device modules, mounted by `pg run`, deployed by `pg sync`
 │   ├── board.py          #   pin map (single source of truth) + estop()
 │   ├── sonar.py          #   ultrasonic that cannot hang
+│   ├── drive.py          #   speed ceiling, real brake, deadman, dry-run
 │   └── Motor/ST7789/TRSensor/ws2812.py   # vendor drivers, original filenames
 ├── projects/             # one project per subdirectory (main.py + README.md)
-├── tools/                # bring-up and diagnostics
+├── tools/                # bring-up and diagnostics (MicroPython)
+│   └── host/             #   Mac-side Python 3 — the simulator behind `pg sim`
 ├── ref/                  # Waveshare originals + schematic — gitignored, do not modify
 │   └── factory/          #   factory firmware backup (committed; no download exists)
-├── docs/                 # 01–12 reference
+├── docs/                 # 01–13 reference
 ├── CLAUDE.md
 ├── .githooks/            # blocks AI attribution in commits (see Conventions)
 └── .claude/skills/       # pico2go-* agent skills, one per subsystem
@@ -56,9 +58,17 @@ closed-loop speed, the robot drifts.
 
 1. **Never drive the motors (GP16–21) without confirming the wheels are off the ground.**
    If the user is away or hasn't confirmed, don't touch those pins at all.
+   `./pg dry <app>` exists for exactly this: `Drive(dry=True)` never constructs
+   `PicoGo`, so the pins are not even claimed as outputs, and the whole
+   behaviour above the motors still runs. Develop there first.
 2. `./pg stop` is the emergency stop; `./pg run` traps EXIT/INT/TERM and forces motor
    PWM to 0 with **hardcoded** pin numbers, so it works even with a broken filesystem.
 3. Every app ends with `board.estop()` in a `finally:`.
+   Use `drive.Drive`, not `Motor.PicoGo` directly — it caps speed, brakes
+   instead of coasting, and carries a 300 ms command deadman.
+   **An app that moves must not restart itself after an unhandled exception.**
+   `01_sensorous` does because it cannot move; `02_avoider` deliberately does
+   not.
 4. Don't beep the buzzer or light the RGB LEDs when nobody is in the room.
 
 ## ⚠️ The #1 gotcha
@@ -92,6 +102,8 @@ period, and `./pg unwedge` attempts the serial recovery first.
 ./pg doctor                # host tools, port, USB, board, repo
 ./pg flash                 # MicroPython from ref/
 ./pg run <app> [secs]      # mounts shared/lib, no flash write, E-STOP on exit
+./pg dry <app> [secs]      # same + PG_DRY=1: the app must not drive the motors
+./pg sim [args]            # host-side simulation of 02_avoider — no board at all
 ./pg exec '<code>'         # one-liner probe
 ./pg sync                  # copy shared/lib/*.py to the board
 ./pg install <app>         # + set as main.py (runs on power-up)
@@ -152,7 +164,10 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 
 ## Still unverified
 
-- **Motors GP16–21** — never driven.
+- **Motors GP16–21** — never driven. `02_avoider` and `drive.py` are written and
+  simulated but have never moved a wheel; every speed, threshold and turn
+  duration in them is an argued guess. `docs/13` §13.8 is the order to measure
+  them in.
 - **Line-sensor polarity.** Vendor docs contradict each other (`docs/06` §6.2). Until
   settled, don't assume `readLine()`'s default is correct. `./pg run validate` resolves it.
 - IR remote decode, IR obstacle triggering, LCD/RGB/buzzer visual confirmation — all
@@ -162,4 +177,4 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 
 `.claude/skills/pico2go-*` — one per subsystem: `dev-loop` (entry point, routes to the
 rest), `hardware`, `flashing`, `motion`, `line-following`, `sensors-io`,
-`remote-control`, `display-ui`, `unattended`.
+`remote-control`, `display-ui`, `unattended`, `avoidance`.

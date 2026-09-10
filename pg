@@ -78,6 +78,8 @@ pg — Pico2Go command line
 
   DEVELOP  — nothing is written to the board's flash
     pg run <app> [secs]       run app with shared/lib mounted; E-STOP on exit
+    pg dry <app> [secs]       same, but the app is told not to drive the motors
+    pg sim [args]             run the avoider against a simulated room (no board)
     pg exec '<code>'          run a MicroPython one-liner, print result
     pg eval '<expr>'          evaluate an expression, print value
     pg repl                   interactive REPL (for you, not for Claude)
@@ -212,6 +214,29 @@ run)
     else
         $MP mount "$LIB" exec "PG_RUN_SECS=$inner" run "$app" || true
     fi
+    ;;
+
+dry)
+    # Same as run, plus PG_DRY. An app that honours it exercises every sensor,
+    # decision and pixel while leaving GP16-GP21 alone -- which is the only way
+    # to develop a robot's behaviour with it sitting on a desk.
+    [ $# -ge 1 ] || die "usage: pg dry <app> [seconds]"
+    app=$(resolve_app "$1"); secs=${2:-20}
+    inner=$((secs - 3)); [ "$inner" -lt 3 ] && inner=3
+    info "DRY RUN $app  (app ${inner}s / hard cap ${secs}s, motors not driven)"
+    trap 'echo; estop' EXIT INT TERM
+    if [ -n "$TIMEOUT" ]; then
+        $TIMEOUT -k 5 --foreground -s INT "$secs" \
+            $MP mount "$LIB" exec "PG_RUN_SECS=$inner; PG_DRY=1" run "$app" || true
+    else
+        $MP mount "$LIB" exec "PG_RUN_SECS=$inner; PG_DRY=1" run "$app" || true
+    fi
+    ;;
+
+sim)
+    # Host-side. No board involved, no serial port, nothing to unplug.
+    command -v python3 >/dev/null 2>&1 || die "python3 not found"
+    exec python3 "$TOOLS/host/sim_avoider.py" "$@"
     ;;
 
 exec) [ $# -ge 1 ] || die "usage: pg exec '<code>'"; $MP mount "$LIB" exec "$1" ;;
