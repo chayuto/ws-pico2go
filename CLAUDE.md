@@ -163,15 +163,17 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 | Control loop | sense-only tick **5 ms**; full render tick **102–113 ms**; 19.5 Hz at `TICK_MS=45`. Sensing is cheap, drawing is not. |
 | Heap | text formatting allocates **~14 KB/s**; heap slides 252 KB → 107 KB in 4 s. `gc.collect()` on the render tick holds it flat at ~390 KB. Collecting "while stopped" does nothing — a working robot is never stopped. |
 | IR obstacle GP2/GP3 | **Active LOW confirmed by construction** — LM393 is open-collector with external pull-ups, so idle is HIGH and LOW is the comparator sinking. Both currently sit LOW in open space ⇒ **both pots are too sensitive**. Calibrate by eye: the green front LEDs mirror the outputs; turn each pot until its LED just goes out. |
+| Motor direction | **`forward()` drives forwards** and **channel A is the LEFT wheel** — both confirmed by eye, 2026-09-11. `board.py`'s truth table is right. |
+| IR pots, once trimmed | both pins idle **HIGH** 40/40 — confirming open-collector + pull-up ⇒ idle HIGH, empirically |
 | First run after a flash | ADC reads garbage on **all** channels; re-run before diagnosing |
 | New board out of the box | runs Waveshare factory GPIO-test firmware and **beeps** |
 
 ## Still unverified
 
-- **Motors GP16–21** — never driven. `02_avoider` and `drive.py` are written and
-  simulated but have never moved a wheel; every speed, threshold and turn
-  duration in them is an argued guess. `docs/13` §13.8 is the order to measure
-  them in.
+- **Speeds and turn durations.** The motors now run and their wiring is verified, but
+  `CRUISE`, `SCAN_MS` and `TURN_MS` have never been calibrated against real travel.
+  `docs/13` §13.8 is the order to measure them in. No wheel has yet touched the floor
+  under its own power.
 - **Line-sensor polarity.** Vendor docs contradict each other (`docs/06` §6.2). Until
   settled, don't assume `readLine()`'s default is correct. `./pg run validate` resolves it.
 - **IR obstacle pots are uncalibrated.** Both comparators sit asserted (both green front

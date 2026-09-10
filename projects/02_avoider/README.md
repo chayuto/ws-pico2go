@@ -15,13 +15,16 @@ where it has been. It is a reflex loop with a state machine on top.
 | Written | yes |
 | Validated in simulation | yes — 50 rooms × 120 s, see below |
 | Dry run on the robot | yes — 35 s, `pg dry`. Found a livelock the simulator never produced. |
-| **Motors driven** | **never.** |
+| Live run, wheels raised | yes — 45 s. Pre-flight passed, armed, drove both wheels, 287 pings / 0 timeouts, heap flat. |
+| **Wheels on the floor** | **not yet.** Speeds and turn durations are still uncalibrated. |
 
-**Blocked on the IR detectors.** Both GP2 and GP3 sit LOW permanently in open
-space with the 5 V rail up. `board.py` says active LOW, so the app reads that
-as "obstacle on both sides" and pre-flight now refuses to start. Either the
-trim pots underneath are wound too sensitive, or the documented polarity is
-wrong. `./pg run ir_check 45` and a hand settles it.
+**Motor wiring is verified.** `forward()` drives forwards and channel A is the
+left wheel, both confirmed by eye with `tools/motion_id.py`. The IR pots have
+been trimmed and both pins now idle HIGH.
+
+**What is still a guess:** `CRUISE`, `SCAN_MS`, `TURN_MS` and the stopping
+distance. Nothing has been driven on the floor, so none of them have been
+measured against real travel. See `docs/13` §13.8.
 
 The constants in this file are argued for, not measured. Every one of them is a
 guess until the wheels have turned.
