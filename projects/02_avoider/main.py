@@ -80,7 +80,7 @@ BACK_LONG_MS = 900
 # forward, and a pivot spends that credit entirely, because after turning,
 # "behind" is somewhere it has never been. This is the closest thing to
 # odometry available on a robot with no encoders.
-PIVOT_CM      = 14.0      # clearance ahead needed to simply turn on the spot
+PIVOT_CM      = 5.0       # clearance ahead needed to simply turn on the spot
 CREDIT_MAX_MS = 900       # cap: past this the estimate is fiction
 MIN_BACK_MS   = 150       # a shorter reverse is not worth the risk
 SCAN_MS      = 260        # quarter-ish turn; timing only, drifts with battery
@@ -491,9 +491,17 @@ def main():
                 recent.append(utime.ticks_ms())
                 while recent and utime.ticks_diff(recent[-1], recent[0]) > STUCK_MS:
                     recent.pop(0)
-                # Back off only when too close to rotate, and never further
-                # than the space it just came through.
-                boxed = n.ir_l or n.ir_r or (n.raw is not None and n.raw < PIVOT_CM)
+                # Back off only when genuinely wedged, and never further than
+                # the space it just came through.
+                #
+                # A *single* IR detector firing is not wedged -- it is lateral
+                # information, the only kind this robot gets. Something is close
+                # on one shoulder, which means the other shoulder is clear, so
+                # pivot away from it instead of reversing blind. Both firing at
+                # once, or an echo inside PIVOT_CM, means squarely up against
+                # something and there is no room to rotate.
+                boxed = (n.ir_l and n.ir_r) or (n.raw is not None and n.raw < PIVOT_CM)
+                one_side = n.ir_l != n.ir_r
                 if len(recent) >= STUCK_N:
                     escapes += 1
                     no_progress += 1
@@ -506,6 +514,10 @@ def main():
                         st.side = "R" if st.side == "L" else "L"
                         st.go("TURN", ESCAPE_TURN, "trapped, nowhere to back")
                         dr.pivot(st.side, TURN_SPEED)
+                elif one_side and not boxed:
+                    st.side = "R" if n.ir_l else "L"
+                    st.go("TURN", TURN_MS, "turn away from IR")
+                    dr.pivot(st.side, TURN_SPEED)
                 elif boxed and min(BACK_MS, credit) >= MIN_BACK_MS:
                     st.go("BACK", min(BACK_MS, credit), "too close to turn")
                     dr.backward(BACK_SPEED)

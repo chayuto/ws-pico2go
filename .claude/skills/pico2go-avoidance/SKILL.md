@@ -59,6 +59,18 @@ encoders, the estimate is fiction.
 the stuck detector constantly, and escapes — and the escape manoeuvre reverses
 furthest of all. Removing the dangerous move made it happen more.
 
+**What does work is using the information rather than deleting the manoeuvre.**
+A *single* IR detector firing is not "wedged" — it is the only lateral
+information this robot gets, and it says the other shoulder is clear. Pivot
+away. Keep reversing for both detectors firing at once, or an echo inside
+`PIVOT_CM`. Measured: reversing went from every run to **none**, escapes fell
+21 → 16, no run ever gave up, and collisions moved by one across fifty rooms.
+
+**Check that a knob is connected before turning it.** `PIVOT_CM` 14 → 5 changed
+*nothing* — every metric byte-identical over twelve runs — because the robot
+brakes at `STOP_CM` = 20 and never gets to 14 cm, so that half of the test could
+not fire. A threshold sitting downstream of a harder threshold is unreachable.
+
 ## Latency is stopping distance
 
 **Measured on the board, not assumed:**

@@ -116,6 +116,40 @@ gains no separation, re-triggers its avoid immediately, hits the stuck detector
 constantly, and escapes; and the escape manoeuvre reverses furthest of all.
 **Removing the dangerous move made the robot do more of it.**
 
+### Using the information instead of removing the manoeuvre
+
+There is a version of that idea which does work, and the difference is precise.
+
+A **single** IR detector firing is not "wedged". It is the only lateral
+information this robot ever gets: something is close on one shoulder, therefore
+the other shoulder is clear. Pivot away from it. Reserve reversing for being
+*squarely* up against something — both detectors firing at once, or an echo
+inside `PIVOT_CM`.
+
+| | reverses | avoids | escapes | gave up | collisions |
+|---|---|---|---|---|---|
+| back off whenever any IR fires | 12/12 seeds | 189 | 21 | 2/12 | 5 / 50 rooms |
+| pivot away on a one-sided hit | **0/12 seeds** | 199 | **16** | **0/12** | 6 / 50 rooms |
+
+Reversing disappeared entirely, escapes fell by a quarter, and no run ever gave
+up. Collisions moved by one across fifty rooms — noise, and all six were the
+sideswipe of §13.7, which nothing in this file can fix.
+
+The distinction that matters: the failed experiment **deleted a capability**;
+this one **acts on evidence it already had**. The robot still reverses when it
+genuinely cannot rotate.
+
+### A constant that turned out to be inert
+
+`PIVOT_CM` was 14 cm, and lowering it to 5 changed **nothing** — every metric
+byte-identical across twelve 120-second rooms. The reason: the robot brakes at
+`STOP_CM` (20 cm) and stops within a centimetre or two, so a sonar-only trigger
+leaves `raw` at about 18–20 cm. It never reaches 14, so the sonar half of the
+`boxed` test never fired and the IR half decided everything.
+
+Worth remembering when tuning: a threshold downstream of a *harder* threshold
+can be unreachable. Measure whether a knob is connected before turning it.
+
 ## 13.5 Choosing a side without a servo
 
 `SCAN` uses the chassis as the gimbal:
