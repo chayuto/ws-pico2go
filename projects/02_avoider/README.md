@@ -16,15 +16,36 @@ where it has been. It is a reflex loop with a state machine on top.
 | Validated in simulation | yes — 50 rooms × 120 s, see below |
 | Dry run on the robot | yes — 35 s, `pg dry`. Found a livelock the simulator never produced. |
 | Live run, wheels raised | yes — 45 s. Pre-flight passed, armed, drove both wheels, 287 pings / 0 timeouts, heap flat. |
-| **Wheels on the floor** | **not yet.** Speeds and turn durations are still uncalibrated. |
+| **Untethered on the floor** | **yes — first pass, 2026-09-11.** Installed as `main.py`, USB unplugged, avoiding on its own. |
+
+That last row is an eyewitness report, not a measurement. Untethered means no
+serial link, so there is no telemetry from it: what is confirmed is that it
+drives, sees, stops and turns without human help. How *well* it does any of
+that is still unquantified.
 
 **Motor wiring is verified.** `forward()` drives forwards and channel A is the
 left wheel, both confirmed by eye with `tools/motion_id.py`. The IR pots have
 been trimmed and both pins now idle HIGH.
 
 **What is still a guess:** `CRUISE`, `SCAN_MS`, `TURN_MS` and the stopping
-distance. Nothing has been driven on the floor, so none of them have been
-measured against real travel. See `docs/13` §13.8.
+distance. It drives well enough to look right, which is not the same as being
+calibrated — no turn has been measured against a protractor and no stop against
+a ruler. See `docs/13` §13.8 for the order to do it in.
+
+**What it cannot do, by construction:**
+
+| | |
+|---|---|
+| Know which way it is facing | No IMU, no gyro, no magnetometer. Every turn is a stopwatch, not an angle. |
+| Know how far it has gone | No wheel encoders. `forward(45)` is a duty cycle and a hope. |
+| See sideways | Everything points forward. It will brush a wall it drives parallel to. |
+| See behind | No rear sensor. Reversing is paid for out of §"Reversing is the dangerous move". |
+| **See down** | **No cliff sensor. A table edge or a staircase is invisible to it.** Floor only, doors shut. |
+
+The last one is the only one that is cheap to fix with parts already on the
+robot: the five line-sensor channels point straight down, and a drop reads as
+no reflection on all five at once. Untested, and it would false-trigger on dark
+carpet, which is why it is not in this pass.
 
 The constants in this file are argued for, not measured. Every one of them is a
 guess until the wheels have turned.

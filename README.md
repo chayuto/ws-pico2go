@@ -37,7 +37,7 @@ Thonny-only. Both problems are solved here.
 | # | Project | Description |
 |---|---|---|
 | [01](projects/01_sensorous) | **Sensorous** | Every live sensor on the board except the radio — line array, IR obstacle, ultrasonic, battery, die temperature, IR receiver — across six LCD pages, mirrored to the RGB LEDs, streaming JSON Lines over serial. ~9–11 fps. Runs standalone from `main.py`, restarts itself on a fault. |
-| [02](projects/02_avoider) | **Avoider** | Reactive obstacle avoidance on one fixed forward ultrasonic beam plus two IR bumpers — brake, back off on earned credit, body-scan left and right, take the freer side. Ten-state machine, pre-flight that refuses to drive a dead sensor, and a dry-run mode that never claims the motor pins. **Written and simulated; not yet run on the robot.** |
+| [02](projects/02_avoider) | **Avoider** | Reactive obstacle avoidance on one fixed forward ultrasonic beam plus two IR bumpers — brake, back off on earned credit, body-scan left and right, take the freer side. Ten-state machine, pre-flight that refuses to drive a dead sensor, and a dry-run mode that never claims the motor pins. **Running autonomously on the floor**, installed as `main.py`, untethered. |
 
 ### Tools
 

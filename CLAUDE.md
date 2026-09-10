@@ -170,10 +170,12 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 
 ## Still unverified
 
-- **Speeds and turn durations.** The motors now run and their wiring is verified, but
-  `CRUISE`, `SCAN_MS` and `TURN_MS` have never been calibrated against real travel.
-  `docs/13` §13.8 is the order to measure them in. No wheel has yet touched the floor
-  under its own power.
+- **Speeds and turn durations.** `02_avoider` now runs untethered on the floor and looks
+  right, but `CRUISE`, `SCAN_MS` and `TURN_MS` have never been measured — no turn against
+  a protractor, no stop against a ruler. `docs/13` §13.8 is the order to do it in.
+- **No cliff sensing.** Nothing on this robot looks down except the line array, which is
+  not wired into any behaviour. A table edge or a staircase is invisible. Run it on the
+  floor with the doors shut.
 - **Line-sensor polarity.** Vendor docs contradict each other (`docs/06` §6.2). Until
   settled, don't assume `readLine()`'s default is correct. `./pg run validate` resolves it.
 - **IR obstacle pots are uncalibrated.** Both comparators sit asserted (both green front
