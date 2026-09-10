@@ -160,7 +160,7 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 | GP2/GP3/GP4/GP15 | external pull-ups / pull-down / idle-low all confirmed |
 | GP5 IR pull-up | **refuted** — only a weak pull; the schematic's `R1 4.7k` was misattributed |
 | Ultrasonic | **100 % answer rate**, **3.0 ms/ping**, **σ 0.09 cm** over 60 samples; 233 pings, 0 timeouts in a 35 s run. Far steadier than assumed. |
-| IR obstacle GP2/GP3 | **Both sit LOW permanently** in open space with the 5 V rail up, and stay LOW against an internal pull-up. Pots latched, or the active-LOW polarity is wrong — **unresolved**, needs `./pg run ir_check 45` and a hand. |
+| IR obstacle GP2/GP3 | **Active LOW confirmed by construction** — LM393 is open-collector with external pull-ups, so idle is HIGH and LOW is the comparator sinking. Both currently sit LOW in open space ⇒ **both pots are too sensitive**. Calibrate by eye: the green front LEDs mirror the outputs; turn each pot until its LED just goes out. |
 | First run after a flash | ADC reads garbage on **all** channels; re-run before diagnosing |
 | New board out of the box | runs Waveshare factory GPIO-test firmware and **beeps** |
 
@@ -172,10 +172,10 @@ Do not re-derive these; they were measured, and several contradict the vendor do
   them in.
 - **Line-sensor polarity.** Vendor docs contradict each other (`docs/06` §6.2). Until
   settled, don't assume `readLine()`'s default is correct. `./pg run validate` resolves it.
-- **IR obstacle polarity.** Both detectors read LOW always. `board.py` says active LOW,
-  so that means "obstacle" — but nothing has ever been seen to *change*. Run
-  `./pg run ir_check 45` and wave a hand. Until then `02_avoider` cannot cruise, and
-  its pre-flight refuses to start.
+- **IR obstacle pots are uncalibrated.** Both comparators sit asserted, so `02_avoider`
+  refuses to start. This is a screwdriver job, not a code job: turn each pot on the
+  underside until its green front LED just goes out, then `./pg run ir_check 45`.
+  Nothing downstream can be tested until it is done.
 - IR remote decode, LCD/RGB/buzzer visual confirmation — all need a human in the room.
 
 ## Agent Skills

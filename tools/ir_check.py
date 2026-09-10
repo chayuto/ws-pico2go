@@ -5,18 +5,20 @@
 Wave a hand slowly across the LEFT sensor, then the RIGHT one. The LCD shows
 both pins live and counts every transition; the serial link logs each one.
 
-Two hypotheses, and only a hand can separate them:
+The polarity is not in doubt, and no hand is needed to establish it. The LM393
+output is **open-collector** and GP2/GP3 carry external pull-ups (measured:
+both held high against a 60 K internal pull-down). An open-collector output
+idles high-impedance, so the pull-up decides the idle level: **idle is HIGH,
+and LOW is the comparator actively sinking.** Active LOW is correct.
 
-* `board.py` says these are **active LOW** (LOW = obstacle). If they sit LOW in
-  open space, the trim pots on the underside are wound too sensitive and the
-  comparators are latched on.
-* Or the polarity is inverted on this board (LOW = clear), in which case they
-  are idle and healthy and the pin map comment is wrong.
+So a pin sitting LOW in open space means the comparator is asserted, which
+means the trim pot for that sensor is wound too sensitive -- or the surface
+under the robot is reflective enough to trip it.
 
-If a hand makes the pin change, the reading that *appears* when the hand is
-there is the "obstacle" state, and that settles it. If nothing ever changes,
-it is the pots -- or the emitters are dark, which means the 5 V rail is down
-and the chassis power switch is off.
+**The pots are calibrated by eye, not by code.** Two green LEDs on the front
+mirror the comparator outputs. Waveshare's own procedure: if an LED is always
+on, turn that sensor's pot on the underside until it *just* goes out. That is
+the point of maximum detection distance. This tool then confirms it.
 
 Never drives the motors.
 """
@@ -79,12 +81,22 @@ def main():
 
     verdict = []
     if tl == 0 and tr == 0:
-        verdict = ["NOTHING MOVED.", "",
-                   "stuck at L=%d R=%d." % (idle_l, idle_r),
-                   "trim pots, or no hand."]
-        print("\nNo transition on either pin.")
-        print("Either no hand was presented, or both comparators are latched.")
-        print("The pots are two small screws on the underside, one per sensor.")
+        if idle_l == 0 or idle_r == 0:
+            verdict = ["ASSERTED, NOT MOVING.", "",
+                       "L=%d R=%d  (0 = detect)" % (idle_l, idle_r),
+                       "the green front LEDs are on.",
+                       "turn that pot underneath",
+                       "until the LED just goes out."]
+            print("\nStuck asserted: L=%d R=%d, and 0 means detect." % (idle_l, idle_r))
+            print("The comparator is sinking, so its pot is too sensitive.")
+            print("Look at the green LEDs on the front - the asserted side is lit.")
+            print("Turn that sensor's pot on the underside until the LED just goes out.")
+        else:
+            verdict = ["IDLE AND CLEAR.", "",
+                       "L=%d R=%d, nothing near." % (idle_l, idle_r),
+                       "wave a hand to confirm",
+                       "they can still detect."]
+            print("\nBoth clear and stable. Wave a hand to confirm they still fire.")
     else:
         for name, t, seen, idle in (("left", tl, seen_l, idle_l),
                                     ("right", tr, seen_r, idle_r)):
