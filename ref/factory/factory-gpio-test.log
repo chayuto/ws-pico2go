@@ -1,0 +1,274 @@
+gpio1 connet gpio26 
+gpio2 connet gpio0 
+gpio2 connet gpio1 
+gpio2 connet gpio3 
+gpio2 connet gpio26 
+gpio2 connet gpio22 
+gpio3 connet gpio0 
+gpio3 connet gpio1 
+gpio3 connet gpio2 
+gpio3 connet gpio26 
+gpio3 connet gpio22 
+gpio4 connet gpio0 
+gpio4 connet gpio1 
+gpio4 connet gpio2 
+gpio4 connet gpio3 
+gpio4 connet gpio26 
+gpio4 connet gpio22 
+gpio5 connet gpio0 
+gpio5 connet gpio1 
+gpio5 connet gpio2 
+gpio5 connet gpio3 
+gpio5 connet gpio26 
+gpio5 connet gpio22 
+gpio6 connet gpio0 
+gpio6 connet gpio1 
+gpio6 connet gpio2 
+gpio6 connet gpio3 
+gpio6 connet gpio26 
+gpio6 connet gpio22 
+gpio7 connet gpio0 
+gpio7 connet gpio1 
+gpio7 connet gpio2 
+gpio7 connet gpio3 
+gpio7 connet gpio26 
+gpio7 connet gpio22 
+gpio8 connet gpio0 
+gpio8 connet gpio1 
+gpio8 connet gpio2 
+gpio8 connet gpio3 
+gpio8 connet gpio26 
+gpio8 connet gpio22 
+gpio9 connet gpio0 
+gpio9 connet gpio1 
+gpio9 connet gpio2 
+gpio9 connet gpio3 
+gpio9 connet gpio26 
+gpio9 connet gpio22 
+gpio10 connet gpio0 
+gpio10 connet gpio1 
+gpio10 connet gpio2 
+gpio10 connet gpio3 
+gpio10 connet gpio26 
+gpio10 connet gpio22 
+gpio11 connet gpio0 
+gpio11 connet gpio1 
+gpio11 connet gpio2 
+gpio11 connet gpio3 
+gpio11 connet gpio26 
+gpio11 connet gpio22 
+
+GPIO not connet : 12,13,14,15,16,17,18,19,20,21,
+ADC test 
+
+GPIO27=0.01 V
+GPIO27 adc Error!!!!!!
+GPIO28=0.54 V
+GPIO28 adc Error!!!!!!
+
+-------------------------
+
+GPIO test
+
+GPIO connet to GND :  4 , 13 , 15 ,
+GPIO connet to VCC :  0 , 1 , 2 , 3 , 22 , 26 ,
+GPIO connet to GPIO : 
+gpio0 connet gpio1 
+gpio0 connet gpio2 
+gpio0 connet gpio3 
+gpio0 connet gpio22 
+gpio1 connet gpio0 
+gpio1 connet gpio2 
+gpio1 connet gpio3 
+gpio1 connet gpio26 
+gpio2 connet gpio0 
+gpio2 connet gpio1 
+gpio2 connet gpio3 
+gpio2 connet gpio26 
+gpio2 connet gpio22 
+gpio3 connet gpio0 
+gpio3 connet gpio1 
+gpio3 connet gpio2 
+gpio3 connet gpio26 
+gpio3 connet gpio22 
+gpio4 connet gpio0 
+gpio4 connet gpio1 
+gpio4 connet gpio2 
+gpio4 connet gpio3 
+gpio4 connet gpio26 
+gpio4 connet gpio22 
+gpio5 connet gpio0 
+gpio5 connet gpio1 
+gpio5 connet gpio2 
+gpio5 connet gpio3 
+gpio5 connet gpio26 
+gpio5 connet gpio22 
+gpio6 connet gpio0 
+gpio6 connet gpio1 
+gpio6 connet gpio2 
+gpio6 connet gpio3 
+gpio6 connet gpio26 
+gpio6 connet gpio22 
+gpio7 connet gpio0 
+gpio7 connet gpio1 
+gpio7 connet gpio2 
+gpio7 connet gpio3 
+gpio7 connet gpio26 
+gpio7 connet gpio22 
+gpio8 connet gpio0 
+gpio8 connet gpio1 
+gpio8 connet gpio2 
+gpio8 connet gpio3 
+gpio8 connet gpio26 
+gpio8 connet gpio22 
+gpio9 connet gpio0 
+gpio9 connet gpio1 
+gpio9 connet gpio2 
+gpio9 connet gpio3 
+gpio9 connet gpio26 
+gpio9 connet gpio22 
+gpio10 connet gpio0 
+gpio10 connet gpio1 
+gpio10 connet gpio2 
+gpio10 connet gpio3 
+gpio10 connet gpio26 
+gpio10 connet gpio22 
+gpio11 connet gpio0 
+gpio11 connet gpio1 
+gpio11 connet gpio2 
+gpio11 connet gpio3 
+gpio11 connet gpio26 
+gpio11 connet gpio22 
+
+GPIO not connet : 12,13,14,15,16,17,18,19,20,21,
+ADC test 
+
+GPIO27=0.01 V
+GPIO27 adc Error!!!!!!
+GPIO28=0.54 V
+GPIO28 adc Error!!!!!!
+
+-------------------------
+
+GPIO test
+
+GPIO connet to GND :  4 , 13 , 15 ,
+GPIO connet to VCC :  0 , 1 , 2 , 3 , 22 , 26 ,
+GPIO connet to GPIO : 
+gpio0 connet gpio1 
+gpio0 connet gpio2 
+gpio0 connet gpio3 
+gpio0 connet gpio22 
+gpio1 connet gpio0 
+gpio1 connet gpio2 
+gpio1 connet gpio3 
+gpio1 connet gpio26 
+gpio2 connet gpio0 
+gpio2 connet gpio1 
+gpio2 connet gpio3 
+gpio2 connet gpio26 
+gpio2 connet gpio22 
+gpio3 connet gpio0 
+gpio3 connet gpio1 
+gpio3 connet gpio2 
+gpio3 connet gpio26 
+gpio3 connet gpio22 
+gpio4 connet gpio0 
+gpio4 connet gpio1 
+gpio4 connet gpio2 
+gpio4 connet gpio3 
+gpio4 connet gpio26 
+gpio4 connet gpio22 
+gpio5 connet gpio0 
+gpio5 connet gpio1 
+gpio5 connet gpio2 
+gpio5 connet gpio3 
+gpio5 connet gpio26 
+gpio5 connet gpio22 
+gpio6 connet gpio0 
+gpio6 connet gpio1 
+gpio6 connet gpio2 
+gpio6 connet gpio3 
+gpio6 connet gpio26 
+gpio6 connet gpio22 
+gpio7 connet gpio0 
+gpio7 connet gpio1 
+gpio7 connet gpio2 
+gpio7 connet gpio3 
+gpio7 connet gpio26 
+gpio7 connet gpio22 
+gpio8 connet gpio0 
+gpio8 connet gpio1 
+gpio8 connet gpio2 
+gpio8 connet gpio3 
+gpio8 connet gpio26 
+gpio8 connet gpio22 
+gpio9 connet gpio0 
+gpio9 connet gpio1 
+gpio9 connet gpio2 
+gpio9 connet gpio3 
+gpio9 connet gpio26 
+gpio9 connet gpio22 
+gpio10 connet gpio0 
+gpio10 connet gpio1 
+gpio10 connet gpio2 
+gpio10 connet gpio3 
+gpio10 connet gpio26 
+gpio10 connet gpio22 
+gpio11 connet gpio0 
+gpio11 connet gpio1 
+gpio11 connet gpio2 
+gpio11 connet gpio3 
+gpio11 connet gpio26 
+gpio11 connet gpio22 
+
+GPIO not connet : 12,13,14,15,16,17,18,19,20,21,
+ADC test 
+
+GPIO27=0.01 V
+GPIO27 adc Error!!!!!!
+GPIO28=0.55 V
+GPIO28 adc Error!!!!!!
+
+-------------------------
+
+GPIO test
+
+GPIO connet to GND :  4 , 13 , 15 ,
+GPIO connet to VCC :  0 , 1 , 2 , 3 , 22 , 26 ,
+GPIO connet to GPIO : 
+gpio0 connet gpio1 
+gpio0 connet gpio2 
+gpio0 connet gpio3 
+gpio0 connet gpio22 
+gpio1 connet gpio0 
+gpio1 connet gpio2 
+gpio1 connet gpio3 
+gpio1 connet gpio26 
+gpio2 connet gpio0 
+gpio2 connet gpio1 
+gpio2 connet gpio3 
+gpio2 connet gpio26 
+gpio2 connet gpio22 
+gpio3 connet gpio0 
+gpio3 connet gpio1 
+gpio3 connet gpio2 
+gpio3 connet gpio26 
+gpio3 connet gpio22 
+gpio4 connet gpio0 
+gpio4 connet gpio1 
+gpio4 connet gpio2 
+gpio4 connet gpio3 
+gpio4 connet gpio26 
+gpio4 connet gpio22 
+gpio5 connet gpio0 
+gpio5 connet gpio1 
+gpio5 connet gpio2 
+gpio5 connet gpio3 
+gpio5 connet gpio26 
+gpio5 connet gpio22 
+gpio6 connet gpio0 
+gpio6 connet gpio1 
+gpio6 connet gpio2 
+gpio6 connet gpio3 
+gpio6 connet gpio26 

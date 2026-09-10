@@ -1,0 +1,19 @@
+{
+  // VS Code here is a plain editor. All device operations go through ./pg.
+  // There is no MicroPython extension to install and no board to "connect" to.
+
+  "python.analysis.extraPaths": ["src/lib", "typings"],
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticSeverityOverrides": {
+    // MicroPython modules that Pylance cannot resolve on the host.
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none"
+  },
+
+  "files.associations": { "pg": "shellscript" },
+  "files.exclude": { "**/__pycache__": true, "**/.DS_Store": true },
+  "search.exclude": { "vendor/**": true, "typings/**": true },
+
+  "[python]": { "editor.tabSize": 4, "editor.insertSpaces": true },
+  "[shellscript]": { "editor.tabSize": 4 }
+}

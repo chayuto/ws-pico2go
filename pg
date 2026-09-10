@@ -1,0 +1,250 @@
+#!/bin/sh
+# pg — Pico2Go command line. No IDE required.
+#
+# Source of truth is this repo. shared/lib is served to the board over the serial
+# link with `mpremote mount`, so `pg run` needs no copy step and no flash writes.
+#
+#   pg doctor              check tools + board
+#   pg run <app> [secs]    run an app from projects/ (auto E-STOP on exit)
+#   pg install <app>       deploy libs + set app as main.py (standalone)
+#   pg stop                EMERGENCY STOP — motors + buzzer off, now
+#
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+LIB="$ROOT/shared/lib"
+APPS="$ROOT/projects"
+VENDOR="$ROOT/ref"
+UF2_DEFAULT="$VENDOR/PicoGo_Code V2/uf2/RPI_PICO2-20250415-v1.25.0.uf2"
+
+# Optional: export PG_PORT=/dev/cu.usbmodem14101 to pin a specific board.
+if [ -n "${PG_PORT:-}" ]; then
+    MP="mpremote connect $PG_PORT"
+else
+    MP="mpremote"
+fi
+
+# GNU timeout (brew install coreutils); fall back to no timeout.
+if command -v gtimeout >/dev/null 2>&1;  then TIMEOUT=gtimeout
+elif command -v timeout >/dev/null 2>&1; then TIMEOUT=timeout
+else TIMEOUT=""; fi
+
+die()  { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[36m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[33mwarn:\033[0m %s\n' "$*" >&2; }
+
+need_tool() { command -v "$1" >/dev/null 2>&1 || die "$1 not found — brew install $2"; }
+
+# Pin numbers must match shared/lib/board.py. Hardcoded here so E-STOP works even
+# when the board's filesystem is empty or broken.
+ESTOP_PY='
+from machine import Pin, PWM
+for p in (16, 21):
+    try: PWM(Pin(p)).duty_u16(0)
+    except Exception: pass
+for p in (17, 18, 19, 20, 4):
+    try: Pin(p, Pin.OUT).value(0)
+    except Exception: pass
+print("E-STOP: motors + buzzer off")
+'
+
+estop() { $MP exec "$ESTOP_PY" 2>/dev/null || warn "E-STOP could not reach the board"; }
+
+resolve_app() {
+    a=$1
+    [ -f "$a" ] && { printf '%s' "$a"; return; }
+    [ -f "$APPS/$a" ] && { printf '%s' "$APPS/$a"; return; }
+    [ -f "$APPS/$a.py" ] && { printf '%s' "$APPS/$a.py"; return; }
+    [ -f "$VENDOR/PicoGo_Code V2/$a" ] && { printf '%s' "$VENDOR/PicoGo_Code V2/$a"; return; }
+    die "app not found: $a  (looked in ./, projects/, ref/)"
+}
+
+usage() {
+cat <<'USAGE'
+pg — Pico2Go command line
+
+  SETUP
+    pg doctor                 check host tools, port, and board
+    pg devs                   list serial ports
+    pg fetch                  (re)download Waveshare demos + schematic into ref/
+    pg bootsel                put the board into BOOTSEL (no buttons)
+    pg flash [file.uf2]       flash firmware (default: MicroPython from ref/)
+
+  DEVELOP  — nothing is written to the board's flash
+    pg run <app> [secs]       run app with shared/lib mounted; E-STOP on exit
+    pg exec '<code>'          run a MicroPython one-liner, print result
+    pg eval '<expr>'          evaluate an expression, print value
+    pg repl                   interactive REPL (for you, not for Claude)
+
+  DEPLOY
+    pg sync                   copy shared/lib/*.py to the board
+    pg install <app>          sync + install app as main.py (runs on power-up)
+    pg uninstall              remove main.py
+    pg wipe                   delete every file on the board
+
+  INSPECT
+    pg ls [path] | pg cat <f> | pg rm <f> | pg df | pg info
+
+  SAFETY
+    pg stop                   EMERGENCY STOP — motors + buzzer off immediately
+
+  Env: PG_PORT=/dev/cu.usbmodemXXXX to pin a board.
+USAGE
+}
+
+cmd=${1:-help}; [ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+
+doctor)
+    printf '\033[1mHost tools\033[0m\n'
+    if command -v mpremote >/dev/null 2>&1; then
+        printf '  \033[32m✓\033[0m %-10s %s\n' mpremote "$(mpremote version 2>/dev/null)"
+    else
+        printf '  \033[31m✗\033[0m %-10s missing — brew install mpremote\n' mpremote
+    fi
+    if command -v picotool >/dev/null 2>&1; then
+        printf '  \033[32m✓\033[0m %-10s %s\n' picotool "$(picotool version 2>/dev/null | head -1)"
+    else
+        printf '  \033[31m✗\033[0m %-10s missing — brew install picotool\n' picotool
+    fi
+    if [ -n "$TIMEOUT" ]; then printf '  \033[32m✓\033[0m %-10s %s\n' timeout "$TIMEOUT"
+    else printf '  \033[33m!\033[0m %-10s missing — brew install coreutils (pg run cannot time out)\n' timeout; fi
+
+    printf '\n\033[1mSerial ports\033[0m\n'
+    ports=$(ls /dev/cu.usbmodem* 2>/dev/null || true)
+    if [ -n "$ports" ]; then printf '  \033[32m✓\033[0m %s\n' $ports
+    else printf '  \033[33m!\033[0m no /dev/cu.usbmodem* — board not connected, in BOOTSEL, or charge-only cable\n'; fi
+
+    printf '\n\033[1mBOOTSEL volume\033[0m\n'
+    if [ -d /Volumes/RP2350 ]; then printf '  \033[32m✓\033[0m /Volumes/RP2350 (board is in BOOTSEL — ready for: pg flash)\n'
+    else printf '  \033[2m-\033[0m  not in BOOTSEL\n'; fi
+
+    printf '\n\033[1mUSB\033[0m\n'
+    usb=$(ioreg -p IOUSB -w0 -l 2>/dev/null | grep -B8 -A8 '"idVendor" = 11914' | grep '"USB Product Name"' | head -1 | sed 's/.*= "//; s/"//')
+    if [ -n "$usb" ]; then
+        printf '  \033[32m✓\033[0m Raspberry Pi device enumerated: %s\n' "$usb"
+    else
+        printf '  \033[33m!\033[0m no 0x2E8A device on USB — unplugged, or a charge-only cable\n'
+    fi
+
+    printf '\n\033[1mBoard\033[0m\n'
+    if [ -z "$ports" ] && [ -n "$usb" ] && [ ! -d /Volumes/RP2350 ]; then
+        printf '  \033[31m✗\033[0m enumerated but macOS made no /dev/cu node\n'
+        printf '      \033[1mUnplug the USB-C cable and plug it back in.\033[0m\n'
+        printf '      (macOS sometimes fails to attach its CDC driver when a board\n'
+        printf '       re-enumerates straight from BOOTSEL into MicroPython.)\n'
+    elif [ -z "$ports" ]; then
+        printf '  \033[2m-\033[0m  skipped (no serial port)\n'
+    else
+        out=$($MP eval "__import__('sys').implementation" 2>&1 | tr -d '\000') || true
+        case "$out" in
+            *"could not enter raw repl"*|*"failed to access"*)
+                printf '  \033[31m✗\033[0m serial port present, but it is not MicroPython.\n'
+                printf '      Something else is running (a new RP2350-Plus ships with\n'
+                printf '      Waveshare factory GPIO-test firmware). Fix:\n'
+                printf '        ./pg bootsel && ./pg flash\n' ;;
+            *implementation*|*name=*)
+                printf '  \033[32m✓\033[0m MicroPython: %s\n' "$(printf '%s' "$out" | head -1)" ;;
+            *)
+                printf '  \033[31m✗\033[0m unexpected REPL response: %s\n' "$(printf '%s' "$out" | head -1)" ;;
+        esac
+    fi
+
+    printf '\n\033[1mRepo\033[0m\n'
+    nlib=$(ls "$LIB"/*.py 2>/dev/null | wc -l | tr -d ' ')
+    napp=$(ls "$APPS"/*.py 2>/dev/null | wc -l | tr -d ' ')
+    printf '  libs : %s module(s) in shared/lib\n' "$nlib"
+    printf '  apps : %s app(s) in projects\n'    "$napp"
+    [ -f "$UF2_DEFAULT" ] && printf '  fw   : \033[32m✓\033[0m vendor firmware present\n' \
+                          || printf '  fw   : \033[33m!\033[0m missing — run: pg fetch\n'
+    printf '\n\033[2mReminder: the chassis power switch must be ON or nothing moves.\033[0m\n'
+    ;;
+
+devs) need_tool mpremote mpremote; $MP devs ;;
+
+fetch)
+    info "downloading Waveshare V2 package into ref/"
+    mkdir -p "$VENDOR"
+    curl -fL# -o "$VENDOR/PicoGo_Code_V2.zip" https://files.waveshare.com/wiki/PicoGo/PicoGo_Code_V2.zip
+    curl -fL# -o "$VENDOR/PicoGo_Schematic_V2.pdf" https://files.waveshare.com/upload/8/8b/PicoGo_Schematic_V2.pdf
+    (cd "$VENDOR" && unzip -oq PicoGo_Code_V2.zip && rm -rf __MACOSX)
+    info "done: $(ls "$VENDOR")"
+    ;;
+
+bootsel)
+    info "requesting BOOTSEL…"
+    $MP bootloader 2>/dev/null || picotool reboot -u -f 2>/dev/null \
+        || die "could not reach the board — hold BOOT, tap RESET, release RESET then BOOT"
+    sleep 2
+    [ -d /Volumes/RP2350 ] && info "BOOTSEL ready (/Volumes/RP2350)" || warn "no /Volumes/RP2350 yet — give it a moment"
+    ;;
+
+flash)
+    need_tool picotool picotool
+    uf2=${1:-$UF2_DEFAULT}
+    [ -f "$uf2" ] || die "no such uf2: $uf2  (try: pg fetch)"
+    case "$uf2" in *RPI_PICO-*) die "that is the RP2040 image. The RP2350-Plus needs RPI_PICO2-*.uf2" ;; esac
+    info "flashing $(basename "$uf2")"
+    picotool load -x "$uf2"
+    ;;
+
+run)
+    [ $# -ge 1 ] || die "usage: pg run <app> [seconds]"
+    app=$(resolve_app "$1"); secs=${2:-20}
+    info "run $app  (shared/lib mounted, ${secs}s cap, E-STOP on exit)"
+    trap 'echo; estop' EXIT INT TERM
+    if [ -n "$TIMEOUT" ]; then
+        $TIMEOUT --foreground -s INT "$secs" $MP mount "$LIB" run "$app" || true
+    else
+        $MP mount "$LIB" run "$app" || true
+    fi
+    ;;
+
+exec) [ $# -ge 1 ] || die "usage: pg exec '<code>'"; $MP mount "$LIB" exec "$1" ;;
+eval) [ $# -ge 1 ] || die "usage: pg eval '<expr>'"; $MP mount "$LIB" eval "$1" ;;
+repl) $MP repl ;;
+
+sync)
+    info "copying shared/lib/*.py to the board"
+    for f in "$LIB"/*.py; do [ -e "$f" ] || continue; printf '  %s\n' "$(basename "$f")"; $MP fs cp "$f" : ; done
+    $MP fs ls
+    ;;
+
+install)
+    [ $# -ge 1 ] || die "usage: pg install <app>"
+    app=$(resolve_app "$1")
+    "$0" sync
+    info "installing $(basename "$app") as main.py"
+    $MP fs cp "$app" :main.py
+    info "installed. Unplug USB, switch ON, and it runs by itself."
+    info "to stop it later:  pg stop  then  pg uninstall"
+    ;;
+
+uninstall) info "removing main.py"; $MP fs rm :main.py 2>/dev/null || warn "no main.py on the board"; estop ;;
+
+wipe)
+    printf 'Delete EVERY file on the board? [y/N] '; read -r a
+    case "$a" in y|Y) $MP exec "import os
+for f in os.listdir():
+    try: os.remove(f)
+    except Exception as e: print(f, e)
+print('wiped:', os.listdir())" ;; *) info "cancelled" ;; esac
+    ;;
+
+ls)  $MP fs ls "${1:-}" ;;
+cat) [ $# -ge 1 ] || die "usage: pg cat <file>"; $MP fs cat ":$1" ;;
+rm)  [ $# -ge 1 ] || die "usage: pg rm <file>";  $MP fs rm ":$1" ;;
+df)  $MP exec "import os
+s = os.statvfs('/')
+tot = s[0]*s[2]//1024; free = s[0]*s[3]//1024
+print('flash fs: {} KB total, {} KB free, {} KB used ({}%)'.format(tot, free, tot-free, 100*(tot-free)//tot))
+import gc; gc.collect()
+print('heap    : {} B free of {} B'.format(gc.mem_free(), gc.mem_free()+gc.mem_alloc()))" ;;
+info) picotool info -a 2>/dev/null || $MP eval "__import__('sys').implementation" ;;
+
+stop) info "EMERGENCY STOP"; estop ;;
+
+help|--help|-h) usage ;;
+*) die "unknown command: $cmd  (try: pg help)" ;;
+esac

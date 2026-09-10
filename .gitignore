@@ -1,0 +1,20 @@
+# Vendor reference material — not original work, re-downloadable with `./pg fetch`
+ref/*
+# ...except the factory firmware backup, which has no download anywhere
+!ref/factory/
+
+# MicroPython type stubs (optional, see .vscode/settings.json)
+typings/
+
+# macOS
+.DS_Store
+._*
+__MACOSX/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Internal dev notes (not for public)
+/docs/internal/
