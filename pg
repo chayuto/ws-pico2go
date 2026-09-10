@@ -98,6 +98,8 @@ pg — Pico2Go command line
     pg unwedge                recover a board stuck after a hard-killed `pg run`
 
   Env: PG_PORT=/dev/cu.usbmodemXXXX to pin a board.
+       PG_SET='NAME=1' to inject extra globals into pg run / pg dry,
+       e.g. PG_SET='PG_NO_IR=1' to run the avoider on sonar alone.
 USAGE
 }
 
@@ -206,13 +208,16 @@ run)
     # timeout stays a backstop. A hard-killed `mpremote mount` wedges the device
     # (see `pg unwedge`), so a clean exit matters.
     inner=$((secs - 3)); [ "$inner" -lt 3 ] && inner=3
+    inject="PG_RUN_SECS=$inner"
+    [ -n "${PG_SET:-}" ] && inject="$inject; $PG_SET"
     info "run $app  (shared/lib mounted, app ${inner}s / hard cap ${secs}s, E-STOP on exit)"
+    [ -n "${PG_SET:-}" ] && info "injected: $PG_SET"
     trap 'echo; estop' EXIT INT TERM
     if [ -n "$TIMEOUT" ]; then
         $TIMEOUT -k 5 --foreground -s INT "$secs" \
-            $MP mount "$LIB" exec "PG_RUN_SECS=$inner" run "$app" || true
+            $MP mount "$LIB" exec "$inject" run "$app" || true
     else
-        $MP mount "$LIB" exec "PG_RUN_SECS=$inner" run "$app" || true
+        $MP mount "$LIB" exec "$inject" run "$app" || true
     fi
     ;;
 
@@ -223,13 +228,16 @@ dry)
     [ $# -ge 1 ] || die "usage: pg dry <app> [seconds]"
     app=$(resolve_app "$1"); secs=${2:-20}
     inner=$((secs - 3)); [ "$inner" -lt 3 ] && inner=3
+    inject="PG_RUN_SECS=$inner; PG_DRY=1"
+    [ -n "${PG_SET:-}" ] && inject="$inject; $PG_SET"
     info "DRY RUN $app  (app ${inner}s / hard cap ${secs}s, motors not driven)"
+    [ -n "${PG_SET:-}" ] && info "injected: $PG_SET"
     trap 'echo; estop' EXIT INT TERM
     if [ -n "$TIMEOUT" ]; then
         $TIMEOUT -k 5 --foreground -s INT "$secs" \
-            $MP mount "$LIB" exec "PG_RUN_SECS=$inner; PG_DRY=1" run "$app" || true
+            $MP mount "$LIB" exec "$inject" run "$app" || true
     else
-        $MP mount "$LIB" exec "PG_RUN_SECS=$inner; PG_DRY=1" run "$app" || true
+        $MP mount "$LIB" exec "$inject" run "$app" || true
     fi
     ;;
 

@@ -29,9 +29,12 @@ Measured on hardware:
 | | |
 |---|---|
 | `lcd.show()` full frame | **78 ms** |
-| Per-page render | 3–6 ms typical |
+| Per-page render, plain text | 3–6 ms |
+| Per-page render, **240-column per-pixel chart** | **20–35 ms** |
 | A page doing `statvfs` + `gc.collect()` | 25 ms |
-| Whole loop with sampling | 90–114 ms → **9–11 fps** |
+| Sense-only tick, no draw (`02_avoider`) | **5 ms** |
+| Full render tick (draw + blit + LEDs) | **102–113 ms** |
+| `01_sensorous` whole loop with sampling | 90–114 ms → **9–11 fps** |
 
 So the blit is **70–85 % of every frame**. Consequences:
 
@@ -41,6 +44,31 @@ So the blit is **70–85 % of every frame**. Consequences:
   **core 1** (verified usable and completely idle).
 - **Never report frame rate from anything but the whole loop.** Timing only the sensor
   read once produced a header claiming ~166 Hz against a real 9 fps.
+
+## If anything real-time shares the thread, decouple it from the frame
+
+Measured on `02_avoider`: a sense-only tick is **5 ms**, a render tick is
+**102–113 ms**. Redrawing every iteration would therefore cut a control loop's
+rate by more than **20×**. Render on a timer, not per iteration, and put a
+floor on redraws triggered by state changes — two states that flicker across a
+threshold will otherwise claim the whole loop.
+
+That floor matters: an early `02_avoider` run redrew on every state change,
+livelocked between two states, and spent every tick in a blit.
+
+## Collect garbage on render ticks
+
+Formatting text for the panel and for telemetry allocates hard — measured at
+**~14 KB/s**, with the heap sliding **252 KB → 107 KB in four seconds** of
+ordinary running. There is no leak; MicroPython collects when it must. But an
+unscheduled collection is an unpredictable pause, which on a moving robot is
+latency.
+
+Put `gc.collect()` on the render tick. It already costs ~100 ms, so a
+collection there is free, and it holds the heap flat (measured: steady at
+~390 KB). **Do not** condition it on the machine being idle — "collect while
+stopped" sounds prudent and does nothing, because a working robot is never
+stopped.
 
 ## Charts — the mistake to not repeat
 

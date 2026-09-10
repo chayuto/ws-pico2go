@@ -15,12 +15,31 @@ running. This is the most likely cause of a Pico2Go "freezing" mid-run.
 
 ```python
 import sonar
-d = sonar.read()            # cm, or None on timeout (30 ms ≈ 5 m)
-d = sonar.read_median(5)    # median of 5, ignores timeouts — use this
+d = sonar.read()             # cm, or None on timeout (default 30 ms ≈ 5 m)
+d = sonar.read(12000)        # 12 ms ≈ 2 m — use this in a control loop
+d = sonar.read_median(5)     # stationary, deliberate measurement only
 ```
 
-**Verified:** 20/20 pings returned; a forced 1 µs timeout returned in 205 µs, so the
-guard works. Header runs at **3V3**, not 5 V — don't drop in a 5 V HC-SR04 unchecked.
+**Measured on this board (2026-09-11), against a flat surface:**
+
+| | |
+|---|---|
+| answer rate, 12 ms and 30 ms timeouts | **100 %** (60 pings each) |
+| cost per ping | **3.0 ms** |
+| standard deviation | **0.09 cm** over 60 samples |
+| a 36 s run | **701 pings, 0 timeouts** |
+
+This beam is far steadier than the vendor material suggests. Two consequences:
+
+- **Do not median in a control loop.** With σ = 0.09 cm there are no spikes
+  worth suppressing, and `read_median(5)` costs ~5 pings plus 40 ms of settling
+  — pure detection latency on a robot that is moving. Save it for stationary,
+  deliberate measurements.
+- **Shorten the timeout when moving.** A miss costs the full timeout, so 12 ms
+  (~2 m) instead of 30 ms halves the worst case. Anything past 2 m is "clear".
+
+A forced 1 µs timeout returned in 205 µs, so the guard itself works. Header runs
+at **3V3**, not 5 V — don't drop in a 5 V HC-SR04 unchecked.
 
 Speed of sound is temperature-dependent (~+0.6 m/s per °C); `0.0343 cm/µs` assumes
 ~20 °C. Ultrasound reflects specularly — an angled surface bounces the ping away, so
@@ -32,7 +51,19 @@ instead of `sleep_us(10)` — 1000× too long.
 ## IR obstacle — GP2 (DSR, right), GP3 (DSL, left)
 
 ST188 reflective sensors → LM393 comparator. **Active LOW = obstacle.**
-**Verified:** both pins have strong external pull-ups, so idle reads 1.
+
+**That polarity is true by construction, not by convention.** The LM393 output
+is open-collector and GP2/GP3 carry external pull-ups (measured: both held high
+against a 60 K internal pull-down). An open-collector output idles
+high-impedance, so the pull-up sets the idle level: **idle is HIGH, and LOW is
+the comparator actively sinking.** You never need to wave a hand to establish
+this — and if a pin reads LOW in open space, that is not ambiguous either. The
+comparator is asserted.
+
+**This unit shipped with both pots too sensitive**: both comparators asserted in
+open air with the 5 V rail up, both green front LEDs lit. `02_avoider` read that
+as "obstacle on both sides", could never cruise, and livelocked. Check this
+*first* on any board whose IR behaviour looks wrong — `./pg run ir_check 45`.
 
 - Threshold is set by **two trim potentiometers on the underside** — they ship untrimmed.
 - The **green front LEDs mirror the comparator output**, so you can trim with no code

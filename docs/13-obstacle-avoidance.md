@@ -54,17 +54,31 @@ instead of braking nearly doubles the last term.
 
 **Measured on the board, 2026-09-11.** `sonar_check` against a flat surface:
 **100 % answer rate** at both the 12 ms and the 30 ms timeout, **3.0 ms per
-ping**, and a standard deviation of **0.09 cm** over 60 samples. A 35 s
-`pg dry` run logged **233 pings and zero timeouts**. This beam is far steadier
-than the design assumed, which strengthens rather than weakens §13.6: there is
-no spike noise worth paying detection latency to filter out.
+ping**, and a standard deviation of **0.09 cm** over 60 samples. Two dry runs
+logged **233 and 701 pings with zero timeouts**. This beam is far steadier than
+the design assumed, which strengthens rather than weakens §13.6: there is no
+spike noise worth paying detection latency to filter out.
 
-Ticks in that same dry run measured **123–229 ms**, not the 45 ms design
-target — but the robot was livelocked (§13.7a) and therefore braking and
-redrawing on almost every tick. `brake()` blocks for 120 ms and a redraw costs
-78 ms; together they account for the figure. A cruising tick has neither and
-has **not yet been measured**, because the IR fault below prevented the robot
-from ever reaching `CRUISE`.
+Tick times, measured with the IR pair disabled so the robot could actually
+reach a steady cruise:
+
+| Tick | Measured |
+|---|---|
+| sense only — ping, pins, ADC, decide | **5 ms** |
+| render tick — draw + blit + LEDs | **102–113 ms** |
+| effective loop rate at `TICK_MS = 45` | **19.5 Hz** |
+
+Sensing is cheap; drawing is not. The earlier figure of 123–229 ms per tick was
+the **livelock** (§13.7a), which forced a brake and a redraw on nearly every
+iteration. The design assumption was pessimistic about sensing by an order of
+magnitude and roughly right about the render.
+
+The heap slid **252 KB → 107 KB in four seconds** of that steady cruise —
+around 14 KB/s, almost all of it text formatting for the panel and telemetry.
+No leak, but an unscheduled collection is an unpredictable pause. `gc.collect()`
+on the render tick holds it flat at ~390 KB and costs nothing, because that
+tick already costs 100 ms. Collecting *only while stopped* — the first attempt —
+did nothing at all, because a working robot is never stopped.
 
 Two consequences, both of which shaped the code:
 
@@ -177,14 +191,40 @@ The same run also showed the heap sliding from 214 KB to **11.8 KB** between
 collections. It recovered — no leak — but a GC pause is latency, so the app
 now collects while it is stopped instead.
 
+## 13.7b Degraded modes beat bypasses
+
+With the IR pots uncalibrated the choice looked binary: ignore the pre-flight
+check, or do not run. Neither is right. The app takes an injected global
+instead:
+
+```zsh
+PG_SET='PG_NO_IR=1' ./pg dry avoider 60
+```
+
+`PG_SET` passes arbitrary globals through `pg run` and `pg dry`. In this mode
+the IR pair is genuinely disabled rather than overridden: `Nav` stops reading
+the pins, pre-flight skips its check, the app prints a warning, the panel says
+`IR PAIR OFF - sonar only`, and telemetry carries `"ir":0`.
+
+The robot then has one forward beam and **nothing watching its shoulders**, so
+§13.7's sideswipe and close-angled-wall rows lose their only backstop. That is
+acceptable for bring-up on a bench and unacceptable for leaving it running.
+
+The general shape: when a sensor cannot be trusted, model its absence
+explicitly and make the degradation visible in every output. A flag that
+silences a safety check without changing the behaviour underneath is a lie the
+robot will tell you again later.
+
 ## 13.8 Tuning on real hardware
 
 None of the constants have been measured on the chassis. In order:
 
-0. **`./pg run ir_check 45`** — wave a hand across each IR detector. Until a
-   pin is seen to *change*, you do not know whether the pots are latched or
-   the documented active-LOW polarity is simply wrong. On this board both pins
-   sit LOW in open space with the 5 V rail up, and that is unresolved.
+0. **Trim the IR pots.** LM393 is open-collector with external pull-ups, so
+   idle is HIGH and LOW is the comparator sinking — the polarity needs no
+   experiment. On this board both pins sit LOW in open space with the rail up,
+   which means both pots are too sensitive. The green front LEDs mirror the
+   outputs; turn each pot until its LED just goes out, then confirm with
+   `./pg run ir_check 45`. Nothing downstream is testable until this is done.
 1. **`./pg run sonar_check 30`** — point at a flat wall 30–60 cm away. If the
    answer rate at the short timeout is not near 100 %, raise `PING_US` before
    touching anything else. *(Done: 100 %, 3.0 ms, σ 0.09 cm.)*

@@ -159,7 +159,9 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 | TLC2543 | pipelined — back-to-back A0 reads gave `508` then `959`; `value[1:]` is right |
 | GP2/GP3/GP4/GP15 | external pull-ups / pull-down / idle-low all confirmed |
 | GP5 IR pull-up | **refuted** — only a weak pull; the schematic's `R1 4.7k` was misattributed |
-| Ultrasonic | **100 % answer rate**, **3.0 ms/ping**, **σ 0.09 cm** over 60 samples; 233 pings, 0 timeouts in a 35 s run. Far steadier than assumed. |
+| Ultrasonic | **100 % answer rate**, **3.0 ms/ping**, **σ 0.09 cm** over 60 samples; 701 pings, 0 timeouts in 36 s. Far steadier than assumed — **do not median it in a control loop**. |
+| Control loop | sense-only tick **5 ms**; full render tick **102–113 ms**; 19.5 Hz at `TICK_MS=45`. Sensing is cheap, drawing is not. |
+| Heap | text formatting allocates **~14 KB/s**; heap slides 252 KB → 107 KB in 4 s. `gc.collect()` on the render tick holds it flat at ~390 KB. Collecting "while stopped" does nothing — a working robot is never stopped. |
 | IR obstacle GP2/GP3 | **Active LOW confirmed by construction** — LM393 is open-collector with external pull-ups, so idle is HIGH and LOW is the comparator sinking. Both currently sit LOW in open space ⇒ **both pots are too sensitive**. Calibrate by eye: the green front LEDs mirror the outputs; turn each pot until its LED just goes out. |
 | First run after a flash | ADC reads garbage on **all** channels; re-run before diagnosing |
 | New board out of the box | runs Waveshare factory GPIO-test firmware and **beeps** |
@@ -172,10 +174,11 @@ Do not re-derive these; they were measured, and several contradict the vendor do
   them in.
 - **Line-sensor polarity.** Vendor docs contradict each other (`docs/06` §6.2). Until
   settled, don't assume `readLine()`'s default is correct. `./pg run validate` resolves it.
-- **IR obstacle pots are uncalibrated.** Both comparators sit asserted, so `02_avoider`
-  refuses to start. This is a screwdriver job, not a code job: turn each pot on the
-  underside until its green front LED just goes out, then `./pg run ir_check 45`.
-  Nothing downstream can be tested until it is done.
+- **IR obstacle pots are uncalibrated.** Both comparators sit asserted (both green front
+  LEDs lit), so `02_avoider` refuses to start. Screwdriver job, not a code job: turn each
+  pot on the underside until its LED just goes out, then `./pg run ir_check 45`.
+  Meanwhile `PG_SET='PG_NO_IR=1'` runs the avoider on sonar alone — a real degraded mode,
+  fine on a bench, never unattended.
 - IR remote decode, LCD/RGB/buzzer visual confirmation — all need a human in the room.
 
 ## Agent Skills

@@ -61,15 +61,57 @@ furthest of all. Removing the dangerous move made it happen more.
 
 ## Latency is stopping distance
 
+**Measured on the board, not assumed:**
+
 | Term | Cost |
 |---|---|
-| control period | ~45 ms |
+| sense-only tick — ping, pins, ADC, decide | **5 ms** |
+| render tick — draw + blit + LEDs | **102–113 ms** |
+| ping, echo returned | **3.0 ms** |
 | ping that times out | `PING_US`, use **12 ms** (~2 m), not the 30 ms default |
-| LCD blit | **78 ms** — keep it out of the sense→act path, redraw a few times a second |
-| brake | ~1 cm from 24 cm/s |
+| `brake()`, blocking | 120 ms |
+| brake to a stop | ~1 cm from 24 cm/s (simulation) |
+
+Sensing is cheap and drawing is not. A 45 ms control period with a redraw every
+few hundred ms measured **19.5 iterations/s with zero ping timeouts**. Redrawing
+every tick would cost 20× the control rate.
 
 Use the full 30 ms timeout only while stationary, where latency is free — the
 deliberate scan, and there only.
+
+## A stuck input turns a recovery behaviour into an infinite loop
+
+The first hardware run found what 50 simulated rooms could not. Both IR
+detectors were asserted permanently (miscalibrated pots), so `danger()` was
+always true: the robot could never cruise, never earned reverse credit, and
+ping-ponged `TURN` → `ESCAPE` → `TURN` at about 1 Hz — **33 escapes in 31
+seconds**, forever.
+
+**Any reactive state machine needs a state for "none of my manoeuvres are
+working."** Without one, every recovery path is a candidate livelock. Count
+escapes that produce no forward progress; after a few, halt, say why, and wait
+for a sustained all-clear. Being trapped by geometry is recoverable. Being
+trapped by a sensor telling you something untrue is not, and manoeuvring at a
+wall that may not be there is worse than stopping.
+
+Then push the same check into pre-flight, where it costs nothing and produces a
+legible refusal instead of 31 seconds of thrashing.
+
+## Degraded modes are better than bypasses
+
+When a sensor is untrustworthy, the choice is not "ignore the check" versus
+"cannot run". Give it a real mode:
+
+```zsh
+PG_SET='PG_NO_IR=1' ./pg dry avoider 60     # sonar only, IR pair disabled
+```
+
+`PG_SET` injects arbitrary globals through `pg run`/`pg dry`. In this mode the
+app disables the IR pair, skips its pre-flight check, prints a warning, says
+`IR PAIR OFF - sonar only` on the panel, and flags `"ir":0` in telemetry. The
+robot then has one forward beam and **nothing watching its shoulders**, so the
+sideswipe and close-angled-wall cases lose their only backstop. Legitimate for
+bring-up on a bench; never for leaving it running.
 
 ## Before writing a new driving app
 

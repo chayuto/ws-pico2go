@@ -26,6 +26,7 @@ enumerated-but-no-CDC-node / running non-MicroPython firmware / healthy.
 | Run an app | `./pg run <app> [secs]` — default cap 20 s, E-STOP on exit |
 | Run without driving | `./pg dry <app> [secs]` — injects `PG_DRY=1`; the app leaves GP16–21 unclaimed |
 | Test with no board | `./pg sim [args]` — runs `02_avoider` against a simulated room on the Mac |
+| Inject extra globals | `PG_SET='NAME=1' ./pg run <app>` — e.g. `PG_SET='PG_NO_IR=1'` to run the avoider on sonar alone |
 | One-liner probe | `./pg exec '<code>'` |
 | Expression | `./pg eval '<expr>'` |
 | Deploy libs | `./pg sync` |

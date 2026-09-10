@@ -82,11 +82,23 @@ USB-C  → MP28164 → 3V3 → MCU, LCD, IR receiver, TLC2543, LM393, JDY-32
   1S Li-ion behind an IP5306. **Use ×2.**
 - Die temp 0.712 V → 23.3 °C via the RP2040 formula `27-(v-0.706)/0.001721`. It carries
   over to RP2350 and reads plausibly. Uncalibrated; trend only.
-- **The IR obstacle sensors do fire.** `DSR`/`DSL` were seen reading 0 for a sustained
-  period during a live run, having read 1 in earlier tests — so the ST188 + LM393 chain
-  works. Whether a given reading is a real obstacle or an over-sensitive trim pot still
-  needs a human.
-- **Frame timing:** LCD blit 78 ms, whole render+sample loop 90–114 ms (9–11 fps).
+- **The IR obstacle reading was misread once — don't repeat it.** `DSR`/`DSL` reading 0
+  for a sustained period was recorded as "the chain fires". It was not detection: both
+  comparators are **latched on** because the trim pots ship too sensitive, and both
+  green front LEDs are lit. The earlier tests that read 1 were almost certainly taken
+  with the **chassis switch off**, so the 5 V ST188 emitters were dark and the
+  comparators idle. A sustained 0 is a calibration symptom, not a working sensor.
+  Nothing has yet been observed to *change* state. Fix with the pots, then `ir_check`.
+- **Polarity needs no experiment.** LM393 is open-collector and GP2/GP3 have external
+  pull-ups, so idle is HIGH and LOW is the comparator sinking. Active LOW, by
+  construction.
+- **Ultrasonic is excellent:** 100 % answer rate at both a 12 ms and a 30 ms timeout,
+  **3.0 ms per ping**, **σ 0.09 cm** over 60 samples, 701 pings and 0 timeouts in 36 s.
+  Do not median it inside a control loop; there is nothing to filter.
+- **Frame timing:** LCD blit 78 ms; a full render tick (draw + blit + LEDs) 102–113 ms;
+  a sense-only tick 5 ms; `01_sensorous` render+sample loop 90–114 ms (9–11 fps).
+- **Heap:** text formatting allocates ~14 KB/s. Left alone the heap slides 252 KB → 107 KB
+  in four seconds. `gc.collect()` on the render tick holds it flat at ~390 KB.
 - **GP5 is only weakly pulled up** — it loses to the RP2350's ~60 K internal pulldown.
   The schematic's `R1 4.7k` was misattributed; the pull is likely the IR receiver's own
   internal ~30 K. Don't rely on a strong external pull-up there.

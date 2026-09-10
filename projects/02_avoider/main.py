@@ -126,7 +126,13 @@ class Nav:
     side, which is the only lateral information this robot has.
     """
 
-    def __init__(self):
+    def __init__(self, use_ir=True):
+        # The IR pair can be switched off (PG_SET='PG_NO_IR=1') when its trim
+        # pots are miscalibrated. That is a genuine degraded mode, not a
+        # bypass: the robot then has one forward beam and nothing watching its
+        # shoulders, so the sideswipe and the close-angled-wall cases lose
+        # their only backstop. Run it slower and do not leave it unattended.
+        self.use_ir = use_ir
         self.dsl = Pin(board.DSL, Pin.IN)      # active LOW
         self.dsr = Pin(board.DSR, Pin.IN)
         self.echo = Pin(board.US_ECHO, Pin.IN)
@@ -174,10 +180,13 @@ class Nav:
                 self.hist.pop(0)
             self.clear_run = self.clear_run + 1 if self.raw > CLEAR_CM else 0
 
-        l, r = self.dsl.value() == 0, self.dsr.value() == 0
-        if (l and not self.ir_l) or (r and not self.ir_r):
-            self.ir_hits += 1
-        self.ir_l, self.ir_r = l, r
+        if self.use_ir:
+            l, r = self.dsl.value() == 0, self.dsr.value() == 0
+            if (l and not self.ir_l) or (r and not self.ir_r):
+                self.ir_hits += 1
+            self.ir_l, self.ir_r = l, r
+        else:
+            self.ir_l = self.ir_r = False
 
         if stopped:
             now = utime.ticks_ms()
@@ -276,11 +285,14 @@ def render(lcd, n, dr, st, up, tick_ms, ev):
         x = 2 + int((W - 6) * cm / 100.0)
         lcd.vline(x, 26, 15, col)
 
-    lcd.text("L%s" % ("[HIT]" if n.ir_l else "[ - ]"), 2, 45,
-             WARN if n.ir_l else DIM)
-    lcd.text("R%s" % ("[HIT]" if n.ir_r else "[ - ]"), W - 50, 45,
-             WARN if n.ir_r else DIM)
-    lcd.text("ir x%d" % n.ir_hits, 96, 45, DIM)
+    if n.use_ir:
+        lcd.text("L%s" % ("[HIT]" if n.ir_l else "[ - ]"), 2, 45,
+                 WARN if n.ir_l else DIM)
+        lcd.text("R%s" % ("[HIT]" if n.ir_r else "[ - ]"), W - 50, 45,
+                 WARN if n.ir_r else DIM)
+        lcd.text("ir x%d" % n.ir_hits, 96, 45, DIM)
+    else:
+        lcd.text("IR PAIR OFF - sonar only", 2, 45, WARN)
 
     lcd.text("motor  L%+4d  R%+4d%s" % (dr.l, dr.r, " BRK" if dr.braking else ""),
              2, 58, FG if dr.moving() else DIM)
@@ -369,7 +381,7 @@ class State:
         return utime.ticks_diff(utime.ticks_ms(), self.since)
 
 
-def preflight(n, dry):
+def preflight(n, dry, use_ir=True):
     """Refuse to drive a robot whose only forward sensor might be dead.
 
     Returns None if good, else a reason string.
@@ -380,7 +392,8 @@ def preflight(n, dry):
     # obstacle, it is a miscalibration: the trim pots on the underside are
     # wound too sensitive, or the robot is parked on something reflective.
     # It cannot avoid its way out of that, so say so instead of thrashing.
-    if Pin(board.DSL, Pin.IN).value() == 0 and Pin(board.DSR, Pin.IN).value() == 0:
+    if use_ir and Pin(board.DSL, Pin.IN).value() == 0 \
+            and Pin(board.DSR, Pin.IN).value() == 0:
         return "BOTH IR STUCK ON"
     good = 0
     for _ in range(10):
@@ -408,11 +421,18 @@ def main():
         limit_ms = int(PG_RUN_SECS) * 1000       # noqa: F821 - injected by pg
     except NameError:
         limit_ms = 0                             # 0 = until interrupted
+    try:
+        use_ir = not bool(PG_NO_IR)              # noqa: F821 - injected by pg
+    except NameError:
+        use_ir = True
 
     print("02_avoider -", "DRY RUN, motors untouched" if dry else "LIVE - wheels clear?")
 
-    n = Nav()
+    n = Nav(use_ir=use_ir)
     dr = drive.Drive(dry=dry)
+    if not use_ir:
+        print("WARNING: IR obstacle pair DISABLED - sonar only, nothing "
+              "watching the shoulders")
     lcd = ST7789()
     strip = NeoPixel()
     st = State()
@@ -437,10 +457,11 @@ def main():
         "",
         "stop  %d cm    slow %d cm" % (STOP_CM, SLOW_CM),
         "cruise %d%%     max  %d%%" % (CRUISE, dr.max),
+        "" if use_ir else "IR PAIR OFF - sonar only",
         "",
         "pre-flight...",
     ], ACCENT if dry else WARN)
-    fault = preflight(n, dry)
+    fault = preflight(n, dry, use_ir)
     if fault:
         dr.halt()
         st.go("FAULT", 0, fault)
@@ -666,22 +687,25 @@ def main():
                 else:
                     render(lcd, n, dr, st, utime.ticks_diff(now, started) // 1000,
                            tick_ms, (avoids, escapes, blinds))
+                # A render tick already costs ~100 ms, so a collection is free
+                # here and nowhere else. Collecting only "while stopped" was
+                # useless: a working robot is never stopped, and the heap slid
+                # 252 KB -> 107 KB in four seconds of ordinary cruising.
+                gc.collect()
             ambient(strip, st, n)
-
-            if stopped:
-                gc.collect()        # pay for it while parked, not mid-corner
 
             if utime.ticks_diff(now, last_emit) > 500:
                 last_emit = now
                 print(('{"t":"nav","up":%d,"state":"%s","why":"%s","d":%s,'
                        '"blind":%d,"irl":%d,"irr":%d,"l":%d,"r":%d,'
                        '"avoid":%d,"escape":%d,"pings":%d,"to":%d,'
-                       '"v":%.2f,"credit":%d,"nopro":%d,"tick":%d,"heap":%d}') % (
+                       '"v":%.2f,"credit":%d,"nopro":%d,"ir":%d,"tick":%d,"heap":%d}') % (
                     utime.ticks_diff(now, started) // 1000, st.name, st.reason,
                     "null" if n.raw is None else "%.1f" % n.raw, n.blind,
                     1 if n.ir_l else 0, 1 if n.ir_r else 0, dr.l, dr.r,
                     avoids, escapes, n.pings, n.timeouts, n.volts,
-                    credit, no_progress, tick_ms, gc.mem_free()))
+                    credit, no_progress, 1 if use_ir else 0,
+                    tick_ms, gc.mem_free()))
 
             if limit_ms and utime.ticks_diff(now, started) > limit_ms:
                 dr.brake()
