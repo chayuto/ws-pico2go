@@ -43,13 +43,28 @@ Stopping distance is decided long before the brake. It is the sum of:
 | Term | Cost | At 25 cm/s |
 |---|---|---|
 | control period | 45 ms | 1.1 cm |
-| ping, echo returned | ~3.5 ms at 60 cm | 0.1 cm |
+| ping, echo returned | **3.0 ms measured** | 0.1 cm |
 | ping, timed out at `PING_US` | 12 ms | 0.3 cm |
 | LCD blit, on render ticks only | 78 ms | 2.0 cm |
-| brake to a stop | measured in simulation at ~1.0 cm | 1.0 cm |
+| `brake()`, blocking | 120 ms | — |
+| brake to a stop | ~1.0 cm in simulation | 1.0 cm |
 
 Worst case — a timed-out ping on a render tick — is about **4.4 cm**. Coasting
 instead of braking nearly doubles the last term.
+
+**Measured on the board, 2026-09-11.** `sonar_check` against a flat surface:
+**100 % answer rate** at both the 12 ms and the 30 ms timeout, **3.0 ms per
+ping**, and a standard deviation of **0.09 cm** over 60 samples. A 35 s
+`pg dry` run logged **233 pings and zero timeouts**. This beam is far steadier
+than the design assumed, which strengthens rather than weakens §13.6: there is
+no spike noise worth paying detection latency to filter out.
+
+Ticks in that same dry run measured **123–229 ms**, not the 45 ms design
+target — but the robot was livelocked (§13.7a) and therefore braking and
+redrawing on almost every tick. `brake()` blocks for 120 ms and a redraw costs
+78 ms; together they account for the figure. A cruising tick has neither and
+has **not yet been measured**, because the IR fault below prevented the robot
+from ever reaching `CRUISE`.
 
 Two consequences, both of which shaped the code:
 
@@ -133,14 +148,46 @@ spikes that were harmless in the first place.
 | Drives with a dead sensor | module unplugged, echo stuck | pre-flight refuses to start | — |
 | Drives with the switch off | 5 V rail down, silent no-op | pre-flight reads the battery divider | — |
 
+## 13.7a The livelock, and why there is a `STUCK` state
+
+The first run on real hardware found something 50 simulated rooms never
+produced: **both IR detectors asserted permanently**. `danger()` was therefore
+always true, so the robot could never cruise, could never earn reverse credit,
+and ping-ponged `TURN` → `ESCAPE` → `TURN` at about 1 Hz — **33 escapes in
+31 seconds**, forever, with no terminal state.
+
+Three fixes came out of it:
+
+1. **Pre-flight rejects it.** Both detectors asserted before the robot has
+   moved is not an obstacle, it is a miscalibration, and no manoeuvre escapes
+   it. `preflight()` now returns `BOTH IR STUCK ON`.
+2. **A `STUCK` state.** Four escapes with no forward progress in between and
+   the robot stops, says why, and waits for a sustained 3 s all-clear. Being
+   trapped by geometry is recoverable; being trapped by a sensor telling you
+   something untrue is not.
+3. **Credit consistency.** The escalation from a blocked `TURN` was reversing
+   without checking the credit that every other path respects.
+
+The general lesson: a reactive state machine needs a state for *"none of my
+manoeuvres are working"*. Without one, a stuck input turns a recovery
+behaviour into an infinite loop, and infinite loops on a robot with wheels are
+not harmless.
+
+The same run also showed the heap sliding from 214 KB to **11.8 KB** between
+collections. It recovered — no leak — but a GC pause is latency, so the app
+now collects while it is stopped instead.
+
 ## 13.8 Tuning on real hardware
 
 None of the constants have been measured on the chassis. In order:
 
+0. **`./pg run ir_check 45`** — wave a hand across each IR detector. Until a
+   pin is seen to *change*, you do not know whether the pots are latched or
+   the documented active-LOW polarity is simply wrong. On this board both pins
+   sit LOW in open space with the 5 V rail up, and that is unresolved.
 1. **`./pg run sonar_check 30`** — point at a flat wall 30–60 cm away. If the
    answer rate at the short timeout is not near 100 %, raise `PING_US` before
-   touching anything else; everything downstream assumes the beam usually
-   answers.
+   touching anything else. *(Done: 100 %, 3.0 ms, σ 0.09 cm.)*
 2. **Find the real speed.** Wheels down, a metre of tape, `./pg run drive_check`
    modified to hold one duty for 3 s, and a stopwatch. There are no encoders —
    this is the only way. Repeat on a fresh pack and a tired one; the difference

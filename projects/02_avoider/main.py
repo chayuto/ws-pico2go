@@ -90,6 +90,12 @@ ESCAPE_TURN  = 1100
 
 STUCK_N      = 3          # avoid events...
 STUCK_MS     = 10000      # ...inside this window means it is trapped
+# Escapes without any forward progress in between. Four of those and the robot
+# is not trapped by geometry, it is trapped by a sensor telling it something
+# untrue -- and no manoeuvre fixes that. Stop and say so.
+STUCK_GIVEUP = 4
+PROGRESS_MS  = 400        # forward travel that counts as having got somewhere
+RESUME_MS    = 3000       # all-clear needed before it will try again
 
 BAT_HALT_V   = 3.30       # motors misbehave long before the cells are empty
 RAIL_DOWN_V  = 2.50       # divider is fed from the 5 V rail: low => switch off
@@ -107,7 +113,7 @@ STATE_COLOUR = {
     "ARMING": (60, 40, 0), "CRUISE": (0, 55, 0),  "SLOW":  (55, 30, 0),
     "BLIND":  (0, 30, 55), "BRAKE":  (70, 0, 0),  "BACK":  (70, 0, 0),
     "SCAN":   (0, 0, 60),  "TURN":   (50, 0, 55), "ESCAPE": (60, 0, 60),
-    "HALT":   (25, 0, 0),  "FAULT":  (70, 0, 0),
+    "HALT":   (25, 0, 0),  "FAULT":  (70, 0, 0), "STUCK": (60, 30, 0),
 }
 
 
@@ -370,6 +376,12 @@ def preflight(n, dry):
     """
     if Pin(board.US_ECHO, Pin.IN).value() == 1:
         return "ECHO STUCK HIGH"
+    # Both IR detectors asserted before the robot has moved is not an
+    # obstacle, it is a miscalibration: the trim pots on the underside are
+    # wound too sensitive, or the robot is parked on something reflective.
+    # It cannot avoid its way out of that, so say so instead of thrashing.
+    if Pin(board.DSL, Pin.IN).value() == 0 and Pin(board.DSR, Pin.IN).value() == 0:
+        return "BOTH IR STUCK ON"
     good = 0
     for _ in range(10):
         if n.ping(SCAN_PING_US) is not None:
@@ -409,6 +421,7 @@ def main():
     escapes = 0
     blinds = 0
     credit = 0          # ms of reversing the robot has earned by going forward
+    no_progress = 0     # escapes since the robot last actually got somewhere
     recent = []                 # timestamps of recent avoid events
     tick_ms = TICK_MS
     started = utime.ticks_ms()
@@ -439,6 +452,8 @@ def main():
             prev_t0 = t0
             if dr.l > 0 and dr.r > 0:
                 credit = min(CREDIT_MAX_MS, credit + dt)     # earned
+                if credit >= PROGRESS_MS:
+                    no_progress = 0     # it got somewhere; the count is stale
             elif dr.l < 0 and dr.r < 0:
                 credit = max(0, credit - dt)                 # spent
             elif dr.l or dr.r:
@@ -460,6 +475,7 @@ def main():
                 boxed = n.ir_l or n.ir_r or (n.raw is not None and n.raw < PIVOT_CM)
                 if len(recent) >= STUCK_N:
                     escapes += 1
+                    no_progress += 1
                     recent = []
                     esc = min(BACK_LONG_MS, credit)
                     if esc >= MIN_BACK_MS:
@@ -581,15 +597,39 @@ def main():
                     dr.pivot(st.side, TURN_SPEED)
                 elif leading:
                     escapes += 1
+                    no_progress += 1
                     recent = []
                     dr.brake()
-                    st.go("ESCAPE", BACK_LONG_MS, "boxed in")
-                    dr.backward(BACK_SPEED)
+                    esc = min(BACK_LONG_MS, credit)
+                    if esc >= MIN_BACK_MS:
+                        st.go("ESCAPE", esc, "boxed in")
+                        dr.backward(BACK_SPEED)
+                    else:
+                        st.side = "R" if st.side == "L" else "L"
+                        st.go("TURN", ESCAPE_TURN, "boxed in, nowhere to back")
+                        st.step = 0
+                        dr.pivot(st.side, TURN_SPEED)
                 else:
                     dr.pivot(st.side, TURN_SPEED)
 
+            elif name == "STUCK":
+                # Not trapped by the room -- trapped by a sensor. Wait for a
+                # sustained all-clear rather than manoeuvring at a wall that
+                # may not be there.
+                dr.halt()
+                if n.danger():
+                    st.since = utime.ticks_ms()      # restart the all-clear
+                elif utime.ticks_diff(utime.ticks_ms(), st.since) > RESUME_MS:
+                    no_progress = 0
+                    recent = []
+                    st.go("CRUISE", 0, "clear again")
+
             elif name == "HALT" or name == "FAULT":
                 dr.halt()
+
+            if no_progress >= STUCK_GIVEUP and st.name not in ("STUCK", "FAULT", "HALT"):
+                dr.halt()
+                st.go("STUCK", 0, "%d escapes, no progress" % no_progress)
 
             # ---- battery guard, measured only while stopped ---------------
             if stopped and n.volts and n.volts < RAIL_DOWN_V and not dry:
@@ -616,22 +656,32 @@ def main():
                                                     "power switch, the cells."], WARN)
                 elif st.name == "HALT":
                     card(lcd, "HALTED", [st.reason, "", "motors stopped."], WARN)
+                elif st.name == "STUCK":
+                    card(lcd, "GAVE UP", [st.reason, "",
+                                          "manoeuvring is not going",
+                                          "to help. check the IR trim",
+                                          "pots underneath.",
+                                          "", "resumes on a 3s all-clear."],
+                         HILITE)
                 else:
                     render(lcd, n, dr, st, utime.ticks_diff(now, started) // 1000,
                            tick_ms, (avoids, escapes, blinds))
             ambient(strip, st, n)
+
+            if stopped:
+                gc.collect()        # pay for it while parked, not mid-corner
 
             if utime.ticks_diff(now, last_emit) > 500:
                 last_emit = now
                 print(('{"t":"nav","up":%d,"state":"%s","why":"%s","d":%s,'
                        '"blind":%d,"irl":%d,"irr":%d,"l":%d,"r":%d,'
                        '"avoid":%d,"escape":%d,"pings":%d,"to":%d,'
-                       '"v":%.2f,"credit":%d,"tick":%d,"heap":%d}') % (
+                       '"v":%.2f,"credit":%d,"nopro":%d,"tick":%d,"heap":%d}') % (
                     utime.ticks_diff(now, started) // 1000, st.name, st.reason,
                     "null" if n.raw is None else "%.1f" % n.raw, n.blind,
                     1 if n.ir_l else 0, 1 if n.ir_r else 0, dr.l, dr.r,
                     avoids, escapes, n.pings, n.timeouts, n.volts,
-                    credit, tick_ms, gc.mem_free()))
+                    credit, no_progress, tick_ms, gc.mem_free()))
 
             if limit_ms and utime.ticks_diff(now, started) > limit_ms:
                 dr.brake()
