@@ -82,6 +82,11 @@ USB-C  → MP28164 → 3V3 → MCU, LCD, IR receiver, TLC2543, LM393, JDY-32
   1S Li-ion behind an IP5306. **Use ×2.**
 - Die temp 0.712 V → 23.3 °C via the RP2040 formula `27-(v-0.706)/0.001721`. It carries
   over to RP2350 and reads plausibly. Uncalibrated; trend only.
+- **The IR obstacle sensors do fire.** `DSR`/`DSL` were seen reading 0 for a sustained
+  period during a live run, having read 1 in earlier tests — so the ST188 + LM393 chain
+  works. Whether a given reading is a real obstacle or an over-sensitive trim pot still
+  needs a human.
+- **Frame timing:** LCD blit 78 ms, whole render+sample loop 90–114 ms (9–11 fps).
 - **GP5 is only weakly pulled up** — it loses to the RP2350's ~60 K internal pulldown.
   The schematic's `R1 4.7k` was misattributed; the pull is likely the IR receiver's own
   internal ~30 K. Don't rely on a strong external pull-up there.

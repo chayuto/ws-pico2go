@@ -22,6 +22,7 @@ enumerated-but-no-CDC-node / running non-MicroPython firmware / healthy.
 
 | Task | Command |
 |---|---|
+| Unwedge after a killed run | `./pg unwedge` |
 | Run an app | `./pg run <app> [secs]` — default cap 20 s, E-STOP on exit |
 | One-liner probe | `./pg exec '<code>'` |
 | Expression | `./pg eval '<expr>'` |
@@ -41,7 +42,11 @@ enumerated-but-no-CDC-node / running non-MicroPython firmware / healthy.
 3. `./pg run` already traps EXIT/INT/TERM and forces motor PWM to 0 and GP17/18/19/20/4
    low, using **hardcoded** pin numbers so it works even with a broken filesystem.
 4. Default runtime cap is 20 s. Raise deliberately: `./pg run sensors 120`.
-5. **The chassis power switch must be ON** or the 5 V rail is down: motors, WS2812 RGB
+5. **Long-running apps must stop themselves.** `pg run <app> <secs>` injects a global
+   `PG_RUN_SECS` a few seconds below the host cap; loops should read it and `return`.
+   A hard-killed `mpremote mount` **wedges the board** — port present, REPL silent — and
+   only the RESET button clears it. `./pg unwedge` tries first. See `pico2go-unattended`.
+6. **The chassis power switch must be ON** or the 5 V rail is down: motors, WS2812 RGB
    and the ST188 IR obstacle front-end all die. USB alone only supplies 3V3.
 
 ## Writing device code
@@ -82,5 +87,7 @@ for name, p in (("DSL",3),("DSR",2),("IR",5)):
 | line array, calibration, PID | `pico2go-line-following` |
 | ultrasonic, IR obstacle, battery, LCD, RGB, buzzer | `pico2go-sensors-io` |
 | IR remote, Bluetooth | `pico2go-remote-control` |
+| screen layout, charts, fonts, colours | `pico2go-display-ui` |
+| autorun, standalone, fault recovery, the mount wedge | `pico2go-unattended` |
 
 Long-form reference lives in `docs/01`–`docs/12`.

@@ -161,4 +161,5 @@ Do not re-derive these; they were measured, and several contradict the vendor do
 ## Agent Skills
 
 `.claude/skills/pico2go-*` — one per subsystem: `dev-loop` (entry point, routes to the
-rest), `hardware`, `flashing`, `motion`, `line-following`, `sensors-io`, `remote-control`.
+rest), `hardware`, `flashing`, `motion`, `line-following`, `sensors-io`,
+`remote-control`, `display-ui`, `unattended`.

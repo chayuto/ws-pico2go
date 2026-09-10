@@ -99,6 +99,8 @@ matter, like *never drive the motors without confirming the wheels are clear*.
 | `pico2go-line-following` | TLC2543 pipelining, calibration, the `white_line` polarity trap, PD tuning order |
 | `pico2go-sensors-io` | Non-blocking ultrasonic, IR trim pots, battery maths, ST7789 timing, WS2812, buzzer |
 | `pico2go-remote-control` | NEC decoding + full key-code table, JDY-32 pairing/baud traps, JSON protocol, deadman timers |
+| `pico2go-display-ui` | 240×135 text grid, bar and chart maths, the 78 ms blit budget, paging, the non-standard colour trap |
+| `pico2go-unattended` | `main.py` autorun, verifying standalone over raw serial, fault recovery, and the mount wedge only RESET clears |
 
 ---
 
