@@ -368,6 +368,21 @@ def page_system(lcd, s):
 RENDER = (page_overview, page_line, page_range, page_power, page_inputs, page_system)
 
 
+def end_card(lcd, s, why):
+    """The run is over. Say so, or a static panel looks like a crash."""
+    lcd.fill(BG)
+    lcd.rect(0, 0, W, H, DIM)
+    lcd.text("SENSOROUS STOPPED", 40, 22, HILITE)
+    lcd.text(why, 40, 38, FG)
+    lcd.hline(20, 52, W - 40, DIM)
+    lcd.text("ran %ds, %d samples" % (s.uptime_s(), s.samples), 40, 62, FG)
+    lcd.text("%d pings, %d timeouts" % (s.pings, s.timeouts), 40, 74, FG)
+    lcd.text("batt %.2fV  die %.1fC" % (s.volts, s.temp_c), 40, 86, FG)
+    lcd.text("run again:", 40, 104, DIM)
+    lcd.text("./pg run sensorous 120", 40, 114, ACCENT)
+    lcd.show()
+
+
 # ---------------------------------------------------------------- ambient
 def ambient(strip, s):
     """Four RGB LEDs as a second, much smaller screen: battery, obstacle L/R,
@@ -435,14 +450,63 @@ def main():
 
         if limit_ms and utime.ticks_diff(utime.ticks_ms(), started) > limit_ms:
             print("time limit reached, stopping cleanly")
-            strip.pixels_fill(strip.BLACK)
-            strip.pixels_show()
+            end_card(lcd, s, "TIME LIMIT")
+            # A slow breathing blue, so an idle board is obviously idle and not
+            # dead. The panel holds its last frame forever with nothing driving
+            # it, which otherwise looks exactly like a hang.
+            for _ in range(3):
+                strip.pixels_fill((0, 0, 20)); strip.pixels_show()
+                utime.sleep_ms(250)
+                strip.pixels_fill(strip.BLACK); strip.pixels_show()
+                utime.sleep_ms(250)
             return
 
 
-try:
-    main()
-except KeyboardInterrupt:
-    pass
-finally:
-    board.estop()
+def crash_card(why, n):
+    """Something threw. Say what, on the panel, so an unattended board explains
+    itself instead of just sitting there."""
+    try:
+        lcd = ST7789()
+        lcd.fill(BG)
+        lcd.rect(0, 0, W, H, WARN)
+        lcd.text("SENSOROUS FAULT", 52, 20, WARN)
+        lcd.text("restart #%d" % n, 52, 36, FG)
+        lcd.hline(20, 50, W - 40, DIM)
+        for i, chunk in enumerate([why[j:j + 28] for j in range(0, len(why), 28)][:4]):
+            lcd.text(chunk, 8, 60 + i * 11, FG)
+        lcd.text("retrying in 5s", 8, 112, DIM)
+        lcd.show()
+    except Exception:
+        pass
+
+
+# Unattended operation: a fault must not leave a dead robot. Report it on the
+# panel, flash the LEDs red, then start over. Ctrl-C still exits for a human.
+restarts = 0
+while True:
+    try:
+        main()
+        break                                  # clean finish - stay stopped
+    except KeyboardInterrupt:
+        print("interrupted")
+        break
+    except Exception as e:
+        restarts += 1
+        why = "{}: {}".format(type(e).__name__, e)
+        print("FAULT:", why, "- restart", restarts)
+        try:
+            sys.print_exception(e)
+        except Exception:
+            pass
+        board.estop()
+        crash_card(why, restarts)
+        try:
+            st = NeoPixel()
+            for _ in range(5):
+                st.pixels_fill((60, 0, 0)); st.pixels_show(); utime.sleep_ms(200)
+                st.pixels_fill((0, 0, 0)); st.pixels_show(); utime.sleep_ms(200)
+        except Exception:
+            pass
+        utime.sleep(5)
+
+board.estop()

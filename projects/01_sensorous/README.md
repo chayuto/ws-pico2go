@@ -14,12 +14,47 @@ runs on the way out.
 
 ## Run
 
+### Standalone — the normal way to use it
+
+```zsh
+./pg install sensorous
+```
+
+Installs as `main.py`, so it starts on every power-up and runs **forever** with
+no computer attached. Unplug USB, flip the chassis switch, and it goes.
+Verified: 8 telemetry records in 8 s with no REPL attached, uptime climbing
+across a hard reset.
+
+To stop it again:
+
+```zsh
+./pg stop && ./pg uninstall
+```
+
+### Tethered — while developing
+
 ```zsh
 ./pg run sensorous 60
 ```
 
-It stops itself a few seconds before the host cap (via `PG_RUN_SECS`), so the
-mount closes cleanly. See [Clean exit](#clean-exit) for why that matters.
+Stops itself a few seconds before the host cap (via `PG_RUN_SECS`) so the mount
+closes cleanly — see [Clean exit](#clean-exit). It also paints a **STOPPED**
+card on the panel when it finishes, because the ST7789 holds its last frame
+forever and a finished run otherwise looks exactly like a crash.
+
+## Unattended behaviour
+
+Built to survive with nobody watching:
+
+| Event | What happens |
+|---|---|
+| Runs out of time (tethered) | STOPPED card, LEDs breathe blue three times, clean return |
+| **Any unhandled exception** | `estop()`, a **FAULT** card naming the exception, LEDs flash red, 5 s pause, **restarts itself** — restart counter shown on screen |
+| Ctrl-C | prints `interrupted`, `estop()`, exits for the human |
+| Power-up | `main.py` autoruns, no host needed |
+
+The fault path is tested by injecting a deliberate exception; it recovered and
+restarted three times in 30 s without intervention.
 
 ## Pages
 

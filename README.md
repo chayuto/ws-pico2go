@@ -36,7 +36,7 @@ Thonny-only. Both problems are solved here.
 
 | # | Project | Description |
 |---|---|---|
-| [01](projects/01_sensorous) | **Sensorous** | Every live sensor on the board except the radio — line array, IR obstacle, ultrasonic, battery, die temperature, IR receiver — across six LCD pages, mirrored to the RGB LEDs, streaming JSON Lines over serial. ~9–11 fps. |
+| [01](projects/01_sensorous) | **Sensorous** | Every live sensor on the board except the radio — line array, IR obstacle, ultrasonic, battery, die temperature, IR receiver — across six LCD pages, mirrored to the RGB LEDs, streaming JSON Lines over serial. ~9–11 fps. Runs standalone from `main.py`, restarts itself on a fault. |
 
 ### Tools
 
